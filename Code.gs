@@ -112,6 +112,21 @@ function getPendingTaskCount(role) {
   return count;
 }
 
+function isAdmin(email) {
+  var ss = getDb();
+  var sheet = ss.getSheetByName('Users');
+  var data = sheet.getDataRange().getValues();
+  var searchEmail = cleanString(email);
+  
+  for (var i = 1; i < data.length; i++) {
+    // Lajur A (Indeks 0) = Email, Lajur E (Indeks 4) = Role
+    if (cleanString(data[i][0]) === searchEmail && data[i][4] === 'admin') {
+      return true;
+    }
+  }
+  return false;
+}
+
 // ============================================================================
 // 2. API UTAMA DASHBOARD ADMIN
 // ============================================================================
@@ -1622,4 +1637,119 @@ function getAssetInventoryStats() {
   });
 
   return reportArray;
+}
+
+// ============================================================================
+// 18. MODUL LUPA KATA LALUAN (RESET PASSWORD)
+// ============================================================================
+
+function requestPasswordReset(email) {
+  var ss = getDb();
+  var userSheet = ss.getSheetByName('Users');
+  var tokenSheet = ss.getSheetByName('ResetTokens');
+  
+  // 1. Pastikan Sheet ResetTokens wujud
+  if (!tokenSheet) {
+    tokenSheet = ss.insertSheet('ResetTokens');
+    tokenSheet.appendRow(['Email', 'OTP', 'ExpiryTimestamp']);
+  }
+
+  var cleanEmail = cleanString(email);
+  var userFound = false;
+  var userData = userSheet.getDataRange().getValues();
+
+  // 2. Cari jika emel wujud dalam sistem
+  for (var i = 1; i < userData.length; i++) {
+    if (cleanString(userData[i][0]) == cleanEmail) {
+      userFound = true;
+      break;
+    }
+  }
+
+  if (!userFound) {
+    return { success: false, message: "Emel tidak dijumpai dalam sistem." };
+  }
+
+  // 3. Jana OTP & Tarikh Luput (15 Minit dari sekarang)
+  var otp = Math.floor(100000 + Math.random() * 900000).toString();
+  var expiry = new Date().getTime() + (15 * 60 * 1000); // 15 minit
+
+  // 4. Simpan ke Database (ResetTokens)
+  tokenSheet.appendRow([cleanEmail, otp, expiry]);
+
+  // 5. Hantar Emel OTP
+  var subject = "Kod Reset Kata Laluan Portal LKIM";
+  var body = "<p>Kod OTP anda ialah: <strong>" + otp + "</strong></p><p>Kod ini sah selama 15 minit.</p>";
+  
+  // Pastikan fungsi sendEmailNotification aktif atau guna MailApp terus
+  try {
+    MailApp.sendEmail({
+      to: email,
+      subject: subject,
+      htmlBody: body,
+      name: "Sistem e-Sewaan LKIM"
+    });
+    return { success: true, message: "Kod OTP telah dihantar ke emel anda." };
+  } catch (e) {
+    // Jika kuota emel habis atau error, kita return error tapi (untuk testing) boleh tengok di Log
+    console.log("OTP untuk " + email + ": " + otp); 
+    return { success: true, message: "Kod OTP dijana (Semak Console/Logs jika emel gagal). Kod: " + otp }; 
+  }
+}
+
+function verifyAndResetPassword(email, otp, newPassword) {
+  var ss = getDb();
+  var tokenSheet = ss.getSheetByName('ResetTokens');
+  var userSheet = ss.getSheetByName('Users');
+  
+  if (!tokenSheet) return { success: false, message: "Sistem ralat: Token sheet missing." };
+
+  var cleanEmail = cleanString(email);
+  var tokens = tokenSheet.getDataRange().getValues();
+  var now = new Date().getTime();
+  var validTokenIndex = -1;
+
+  // 1. Cari Token yang Sah (Email sama, OTP sama, Belum Expire)
+  // Kita cari dari bawah (terkini) ke atas
+  for (var i = tokens.length - 1; i > 0; i--) {
+    var rowEmail = cleanString(tokens[i][0]);
+    var rowOtp = String(tokens[i][1]).trim();
+    var rowExpiry = parseFloat(tokens[i][2]);
+
+    if (rowEmail === cleanEmail && rowOtp === String(otp).trim()) {
+      if (now < rowExpiry) {
+        validTokenIndex = i + 1; // Jumpa!
+        break;
+      } else {
+        return { success: false, message: "Kod OTP telah tamat tempoh." };
+      }
+    }
+  }
+
+  if (validTokenIndex === -1) {
+    return { success: false, message: "Kod OTP tidak sah atau salah." };
+  }
+
+  // 2. Tukar Password Pengguna
+  var users = userSheet.getDataRange().getValues();
+  var userIndex = -1;
+
+  for (var j = 1; j < users.length; j++) {
+    if (cleanString(users[j][0]) === cleanEmail) {
+      userIndex = j + 1;
+      break;
+    }
+  }
+
+  if (userIndex !== -1) {
+    // Hash password baru sebelum simpan
+    userSheet.getRange(userIndex, 2).setValue(hashPassword(newPassword));
+    
+    // 3. Padam token yang dah guna (Pilihan: Atau biarkan saja)
+    tokenSheet.deleteRow(validTokenIndex);
+
+    return { success: true, message: "Kata laluan berjaya ditukar. Sila log masuk." };
+  }
+
+  return { success: false, message: "Pengguna tidak dijumpai." };
 }
