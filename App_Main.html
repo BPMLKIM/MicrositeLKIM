@@ -1,0 +1,3352 @@
+<script type="text/babel">
+  const { useState, useEffect, useRef } = React;
+
+  // --- KOMPONEN CANVAS TANDATANGAN ---
+  const SignaturePad = ({ onEnd }) => {
+    const canvasRef = React.useRef(null);
+    const [isDrawing, setIsDrawing] = React.useState(false);
+
+    React.useEffect(() => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "black";
+
+      // Prevent scrolling on mobile when touching canvas
+      canvas.style.touchAction = "none";
+    }, []);
+
+    const startDrawing = (e) => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX || e.touches[0].clientX) - rect.left;
+      const y = (e.clientY || e.touches[0].clientY) - rect.top;
+
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      setIsDrawing(true);
+    };
+
+    const draw = (e) => {
+      if (!isDrawing) return;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX || e.touches[0].clientX) - rect.left;
+      const y = (e.clientY || e.touches[0].clientY) - rect.top;
+
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    };
+
+    const endDrawing = () => {
+      setIsDrawing(false);
+      if (onEnd) onEnd(canvasRef.current);
+    };
+
+    const clear = () => {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    };
+
+    return (
+      <div className="border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 touch-none">
+        <canvas
+          ref={canvasRef}
+          width={300}
+          height={150}
+          className="w-full h-40 cursor-crosshair"
+          onMouseDown={startDrawing}
+          onMouseMove={draw}
+          onMouseUp={endDrawing}
+          onMouseLeave={endDrawing}
+          onTouchStart={startDrawing}
+          onTouchMove={draw}
+          onTouchEnd={endDrawing}
+        />
+        <button
+          type="button"
+          onClick={clear}
+          className="text-xs text-red-500 font-bold p-2 w-full border-t hover:bg-red-50"
+        >
+          <Icons.X className="w-3 h-3 inline mr-1" /> Padam & Lukis Semula
+        </button>
+      </div>
+    );
+  };
+
+  // --- HISTORY VIEW (VERSI GLASSMORPHISM - FIXED) ---
+  const HistoryView = ({
+    user,
+    history,
+    fetchHistory,
+    setView,
+    setToast,
+    setViewHistoryDetail,
+    loadingHistory,
+    viewHistoryDetail, // Added prop to receive the state
+    setSignData, // Added missing prop
+    setShowSignModal, // Added missing prop
+    setRenewalItem, // Added missing prop
+  }) => {
+    React.useEffect(() => {
+      if (user && user.email) fetchHistory(user.email);
+    }, [user?.email]);
+
+    // Helper: Bersihkan data untuk paparan modal
+    const cleanData = (item) => {
+      return {
+        ...item,
+        finalAssetName: item.assetName || item.namaAset || item.nama || "Nama Aset Tidak Dijumpai",
+        finalLocation: item.location || item.lokasi || item.tempat || "Lokasi Tidak Dinyatakan",
+        finalPrice: item.harga || item.hargaAsal || item.price || "0.00",
+        finalDuration: (item.duration || item.tempoh || "0").toString().replace(/bulan/i, "").trim() + " Bulan",
+      };
+    };
+
+    const getAgreementLink = (note) => {
+      if (!note) return null;
+      // Cari pattern [AGREEMENT_LINK::http...]
+      const match = note.match(/\[AGREEMENT_LINK::(https?:\/\/[^\]]+)\]/);
+      return match ? match[1] : null;
+    };
+
+    return (
+      <div className="animate-fade-in max-w-7xl mx-auto pb-12 relative z-10">
+        {/* --- 1. HEADER & NAVIGATION --- */}
+        <div className="flex flex-col md:flex-row justify-between items-end md:items-center mb-8 gap-4">
+          <div>
+            <button
+              onClick={() => setView("home")}
+              className="group flex items-center text-xs font-bold text-slate-500 hover:text-blue-700 transition-colors mb-2"
+            >
+              <div className="bg-white/50 p-1.5 rounded-lg mr-2 group-hover:bg-white shadow-sm transition-all">
+                <Icons.ChevronLeft className="h-4 w-4" />
+              </div>
+              KEMBALI KE UTAMA
+            </button>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-slate-800 tracking-tight">
+              Status <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-blue-500">Permohonan</span>
+            </h2>
+            <p className="text-slate-500 text-sm mt-1 max-w-lg">
+              Pantau status terkini permohonan sewaan aset anda secara masa nyata.
+            </p>
+          </div>
+
+          {/* Action Button Group */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fetchHistory(user.email)}
+              disabled={loadingHistory}
+              className="flex items-center px-5 py-2.5 bg-white/60 hover:bg-white text-blue-900 text-xs font-bold rounded-full shadow-sm hover:shadow-md border border-white/60 backdrop-blur-md transition-all"
+            >
+              <Icons.Refresh className={`h-4 w-4 mr-2 ${loadingHistory ? "animate-spin" : ""}`} />
+              {loadingHistory ? "Mengemaskini..." : "Kemaskini Data"}
+            </button>
+          </div>
+        </div>
+
+        {/* --- 2. STATS OVERVIEW CARDS (GLASS) --- */}
+        {(() => {
+          const activeApps = history.filter((h) => h.status !== "Berjaya" && h.status !== "Tamat Tempoh");
+          const pendingCount = activeApps.filter((h) => h.status === "Dalam Proses" || h.status === "Disokong").length;
+          const actionCount = activeApps.filter((h) => h.status === "Menunggu Persetujuan").length;
+          const approvedCount = activeApps.filter((h) => h.status === "Berjaya").length;
+
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white/60 backdrop-blur-lg p-5 rounded-2xl border border-white/50 shadow-sm flex flex-col justify-between group hover:-translate-y-1 transition-transform duration-300">
+                <div className="flex justify-between items-start">
+                  <div className="p-2 bg-blue-100/50 rounded-lg text-blue-600">
+                    <Icons.FileText className="w-5 h-5" />
+                  </div>
+                  <span className="text-2xl font-extrabold text-slate-700">{activeApps.length}</span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Aktif Diproses</p>
+              </div>
+
+              <div className="bg-white/60 backdrop-blur-lg p-5 rounded-2xl border border-white/50 shadow-sm flex flex-col justify-between group hover:-translate-y-1 transition-transform duration-300">
+                <div className="flex justify-between items-start">
+                  <div className="p-2 bg-yellow-100/50 rounded-lg text-yellow-600">
+                    <Icons.Loader className="w-5 h-5 animate-spin-slow" />
+                  </div>
+                  <span className="text-2xl font-extrabold text-slate-700">{pendingCount}</span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Sedang Disemak</p>
+              </div>
+
+              <div
+                className={`p-5 rounded-2xl border shadow-sm flex flex-col justify-between group hover:-translate-y-1 transition-transform duration-300 ${
+                  actionCount > 0
+                    ? "bg-orange-500 text-white border-orange-400 shadow-orange-500/30"
+                    : "bg-white/60 backdrop-blur-lg border-white/50"
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <div className={`p-2 rounded-lg ${actionCount > 0 ? "bg-white/20 text-white" : "bg-orange-100/50 text-orange-600"}`}>
+                    <Icons.AlertCircle className="w-5 h-5" />
+                  </div>
+                  <span className={`text-2xl font-extrabold ${actionCount > 0 ? "text-white" : "text-slate-700"}`}>{actionCount}</span>
+                </div>
+                <p className={`text-[10px] font-bold uppercase mt-2 ${actionCount > 0 ? "text-orange-100" : "text-slate-400"}`}>
+                  Tindakan Diperlukan
+                </p>
+              </div>
+
+              <div className="bg-white/60 backdrop-blur-lg p-5 rounded-2xl border border-white/50 shadow-sm flex flex-col justify-between group hover:-translate-y-1 transition-transform duration-300">
+                <div className="flex justify-between items-start">
+                  <div className="p-2 bg-green-100/50 rounded-lg text-green-600">
+                    <Icons.CheckCircle className="w-5 h-5" />
+                  </div>
+                  <span className="text-2xl font-extrabold text-slate-700">{approvedCount}</span>
+                </div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mt-2">Telah Diluluskan</p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* --- 3. MAIN TABLE CARD (GLASSMORPHISM) --- */}
+        <div className="bg-white/70 backdrop-blur-xl rounded-3xl border border-white/60 shadow-2xl shadow-blue-900/10 overflow-hidden min-h-[400px] relative">
+          {/* Decorative Glow inside card */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-400/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+
+          {loadingHistory ? (
+            <div className="flex flex-col items-center justify-center h-96 text-slate-400 animate-pulse">
+              <div className="bg-white/50 p-4 rounded-full mb-4 shadow-sm">
+                <Icons.Loader className="animate-spin h-8 w-8 text-blue-500" />
+              </div>
+              <span className="text-sm font-bold tracking-wide">Menyegerakan Data...</span>
+            </div>
+          ) : (
+            (() => {
+              const activeApps = history.filter((h) => h.status !== "Berjaya" && h.status !== "Tamat Tempoh");
+
+              if (activeApps.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center h-96 text-center p-8">
+                    <div className="bg-slate-50/80 p-6 rounded-full mb-6 shadow-inner border border-white">
+                      <Icons.Inbox className="h-12 w-12 text-slate-300" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-2">Tiada Permohonan Aktif</h3>
+                    <p className="text-slate-500 max-w-sm mx-auto mb-8 text-sm leading-relaxed">
+                      Anda tiada permohonan yang sedang diproses buat masa ini. Rekod sewaan aktif boleh disemak di halaman Profil.
+                    </p>
+                    <button
+                      onClick={() => setView("home")}
+                      className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-800 text-white rounded-xl font-bold hover:shadow-lg hover:shadow-blue-500/30 transition-all transform hover:-translate-y-1 text-sm"
+                    >
+                      Mohon Aset Baru
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50/50 border-b border-slate-200/60 backdrop-blur-sm">
+                      <tr>
+                        <th className="p-6 text-xs font-extrabold text-slate-400 uppercase tracking-widest w-1/4">Permohonan</th>
+                        <th className="p-6 text-xs font-extrabold text-slate-400 uppercase tracking-widest w-1/3">Butiran Aset</th>
+                        <th className="p-6 text-xs font-extrabold text-slate-400 uppercase tracking-widest text-center">Status</th>
+                        <th className="p-6 text-xs font-extrabold text-slate-400 uppercase tracking-widest text-right">Tindakan</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100/50">
+                      {activeApps.map((h) => (
+                        <tr key={h.appId} className="hover:bg-blue-50/30 transition-colors group relative">
+                          {/* COL 1: ID & DATE */}
+                          <td className="p-6 align-top">
+                            <div className="flex flex-col">
+                              <span className="font-mono text-[10px] text-slate-400 mb-1">ID RUJUKAN</span>
+                              <span className="font-mono text-xs font-bold text-blue-900 bg-blue-50/80 border border-blue-100 px-2 py-1 rounded-md w-fit mb-2 group-hover:bg-white transition-colors">
+                                {h.appId}
+                              </span>
+                              <div className="flex items-center text-xs text-slate-500 font-medium">
+                                <Icons.Calendar className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                                {h.dateTime}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* COL 2: ASSET DETAILS */}
+                          <td className="p-6 align-top">
+                            <div className="flex items-start">
+                              <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100 mr-3 hidden md:block">
+                                <Icons.Building className="w-5 h-5 text-slate-400" />
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-slate-800 text-sm leading-snug group-hover:text-blue-700 transition-colors">
+                                  {h.nama}
+                                </h4>
+                                <div className="flex items-center text-xs text-slate-500 mt-1.5 leading-relaxed">
+                                  <Icons.MapPin className="w-3 h-3 mr-1 text-orange-500 flex-shrink-0" />
+                                  <span className="truncate max-w-[200px]">{h.lokasi}</span>
+                                </div>
+                                <span className="inline-block mt-2 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 uppercase">
+                                  {h.jenisAset || "Aset LKIM"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* COL 3: STATUS PILL (GLOWING) */}
+                          <td className="p-6 align-middle text-center">
+                            <div
+                              className={`inline-flex items-center px-4 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border shadow-sm backdrop-blur-md ${
+                                h.status === "Berjaya"
+                                  ? "bg-green-100/80 text-green-700 border-green-200 shadow-green-500/10"
+                                  : h.status === "Menunggu Persetujuan"
+                                  ? "bg-orange-500 text-white border-orange-400 shadow-orange-500/30 animate-pulse-slow"
+                                  : h.status === "Ditolak" || h.status === "Dibatalkan"
+                                  ? "bg-red-50/80 text-red-600 border-red-100"
+                                  : "bg-blue-50/80 text-blue-600 border-blue-100"
+                              }`}
+                            >
+                              {h.status === "Berjaya" && <Icons.CheckCircle className="w-3 h-3 mr-1.5" />}
+                              {h.status === "Menunggu Persetujuan" && <Icons.AlertCircle className="w-3 h-3 mr-1.5" />}
+                              {(h.status === "Ditolak" || h.status === "Dibatalkan") && <Icons.XCircle className="w-3 h-3 mr-1.5" />}
+                              {!(h.status === "Berjaya" || h.status === "Menunggu Persetujuan" || h.status === "Ditolak" || h.status === "Dibatalkan") && (
+                                <Icons.Loader className="w-3 h-3 mr-1.5" />
+                              )}
+                              {h.status}
+                            </div>
+                          </td>
+
+                          {/* COL 4: ACTIONS */}
+                          <td className="p-6 align-middle text-right">
+                            <div className="flex flex-col items-end space-y-2">
+                              {/* Primary Action */}
+                              {h.status === "Berjaya" && (
+                                (() => {
+                                  // Check dulu ada tak link agreement dalam nota user
+                                  const signedLink = getAgreementLink(h.userNote);
+
+                                  if (signedLink) {
+                                    // SITUASI A: DAH SIGN -> Tunjuk Butang Lihat Agreement
+                                    return (
+                                      <a
+                                        href={signedLink}
+                                        target="_blank"
+                                        className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-green-700 transition-all flex items-center ml-2 no-underline"
+                                      >
+                                        <Icons.FileText className="w-3 h-3 mr-1" /> Lihat Perjanjian
+                                      </a>
+                                    );
+                                  } else {
+                                    // SITUASI B: BELUM SIGN -> Tunjuk Butang Sign (Draf ada dalam modal nanti)
+                                    return (
+                                      <button
+                                        onClick={() => {
+                                          setSignData({ appId: h.appId, name: user.nama, ic: user.noIc || "-" });
+                                          setShowSignModal(true);
+                                        }}
+                                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-blue-700 transition-all flex items-center ml-2"
+                                      >
+                                        <Icons.PenTool className="w-3 h-3 mr-1" /> Tandatangan
+                                      </button>
+                                    );
+                                  }
+                                })()
+                              )}
+
+                              {h.status === "Menunggu Persetujuan" && (
+                                <button
+                                  // Fix: Guna cleanData(h) supaya modal dapat data lengkap
+                                  onClick={() => setViewHistoryDetail(cleanData(h))}
+                                  className="flex items-center px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold shadow-lg shadow-orange-500/20 transition-all transform hover:scale-105 animate-bounce"
+                                >
+                                  <Icons.CheckSquare className="w-3 h-3 mr-2" /> SAHKAN TAWARAN
+                                </button>
+                              )}
+
+                              {/* Secondary Action */}
+                              <button
+                                // Fix: Guna cleanData(h)
+                                onClick={() => setViewHistoryDetail(cleanData(h))}
+                                className="text-slate-400 hover:text-blue-600 text-xs font-bold flex items-center transition-colors px-2 py-1"
+                              >
+                                <Icons.Eye className="w-3.5 h-3.5 mr-1.5" /> Lihat Butiran Penuh
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()
+          )}
+        </div>
+
+        {/* --- MODAL BUTIRAN PERMOHONAN (Disatukan dalam HistoryView) --- */}
+        {viewHistoryDetail && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200 relative">
+              <div className="bg-white p-5 border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
+                <div>
+                  <h3 className="font-bold text-xl text-slate-800">Butiran Permohonan</h3>
+                  <p className="text-xs text-slate-500 font-mono mt-1">ID: {viewHistoryDetail.appId}</p>
+                </div>
+                <button
+                  onClick={() => setViewHistoryDetail(null)}
+                  className="p-2 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 rounded-full transition-colors"
+                >
+                  <Icons.XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto custom-scrollbar p-6 space-y-6 bg-slate-50/50">
+                <div
+                  className={`flex items-center p-4 rounded-xl border bg-white ${
+                    viewHistoryDetail.status === "Lulus" || viewHistoryDetail.status === "Berjaya"
+                      ? "border-green-200 text-green-800 shadow-green-100"
+                      : viewHistoryDetail.status === "Menunggu Persetujuan"
+                      ? "border-orange-200 text-orange-800 shadow-orange-100"
+                      : (viewHistoryDetail.status || "").includes("Tolak")
+                      ? "border-red-200 text-red-800 shadow-red-100"
+                      : "border-blue-200 text-blue-800 shadow-blue-100"
+                  } shadow-sm`}
+                >
+                  <div
+                    className={`p-3 rounded-full mr-4 ${
+                      viewHistoryDetail.status === "Lulus" || viewHistoryDetail.status === "Berjaya"
+                        ? "bg-green-100"
+                        : viewHistoryDetail.status === "Menunggu Persetujuan"
+                        ? "bg-orange-100"
+                        : "bg-slate-100"
+                    }`}
+                  >
+                    {viewHistoryDetail.status === "Lulus" || viewHistoryDetail.status === "Berjaya" ? (
+                      <Icons.CheckCircle className="w-6 h-6" />
+                    ) : (
+                      <Icons.Info className="w-6 h-6" />
+                    )}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold uppercase opacity-70">Status Terkini</span>
+                    <span className="font-black text-xl tracking-tight">{viewHistoryDetail.status}</span>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                  <h4 className="font-bold text-slate-800 text-sm mb-4 flex items-center border-b pb-2">
+                    <Icons.Home className="w-5 h-5 mr-2 text-blue-600" /> Maklumat Aset & Sewaan
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold uppercase">Nama Aset</label>
+                      <div className="font-bold text-slate-800 text-sm">{viewHistoryDetail.finalAssetName}</div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-slate-400 font-bold uppercase">Lokasi</label>
+                      <div className="font-medium text-slate-700 text-sm">{viewHistoryDetail.finalLocation}</div>
+                    </div>
+
+                    <div className="md:col-span-2 grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-2">
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">Tarikh Mula</label>
+                        <div className="font-bold text-slate-700 text-xs">
+                          {viewHistoryDetail.sdate || viewHistoryDetail.tarikhMula || "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">Tarikh Tamat</label>
+                        <div className="font-bold text-slate-700 text-xs">
+                          {viewHistoryDetail.edate || viewHistoryDetail.tarikhTamat || "-"}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">Tempoh</label>
+                        <div className="font-bold text-blue-600 text-xs">{viewHistoryDetail.finalDuration}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2">
+                      <label className="text-[10px] text-slate-400 font-bold uppercase">Harga Mohon</label>
+                      <div className="font-bold text-slate-600 text-sm">RM {viewHistoryDetail.finalPrice}</div>
+                    </div>
+                    {viewHistoryDetail.hargaLulus && (
+                      <div className="mt-2">
+                        <label className="text-[10px] text-slate-400 font-bold uppercase">Harga Lulus</label>
+                        <div className="font-black text-green-600 text-lg">RM {viewHistoryDetail.hargaLulus}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(viewHistoryDetail.ulasanStaff || viewHistoryDetail.ulasanAdmin) && (
+                  <div className="bg-purple-50 p-5 rounded-xl border border-purple-100">
+                    <h4 className="font-bold text-purple-900 mb-3 flex items-center text-sm">
+                      <Icons.FileText className="w-5 h-5 mr-2" /> Ulasan Pihak Pengurusan
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      {viewHistoryDetail.ulasanStaff && (
+                        <div className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                          <span className="text-[10px] font-bold text-purple-400 uppercase block">Ulasan Penyokong</span>
+                          {viewHistoryDetail.ulasanStaff}
+                        </div>
+                      )}
+                      {viewHistoryDetail.ulasanAdmin && (
+                        <div className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+                          <span className="text-[10px] font-bold text-purple-400 uppercase block">Ulasan Pelulus</span>
+                          {viewHistoryDetail.ulasanAdmin}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {viewHistoryDetail.status === "Menunggu Persetujuan" && (
+                  <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6 shadow-md animate-pulse-slow relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-orange-200 rounded-full blur-2xl opacity-50 -mr-10 -mt-10 pointer-events-none"></div>
+                    <div className="flex items-start mb-4 relative z-10">
+                      <div className="bg-orange-100 p-2 rounded-full mr-3">
+                        <Icons.AlertCircle className="w-6 h-6 text-orange-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-orange-900 text-lg">Tindakan Diperlukan</h4>
+                        <p className="text-sm text-orange-800 mt-1">Permohonan diluluskan. Adakah anda bersetuju dengan kadar sewaan ini?</p>
+                      </div>
+                    </div>
+                    <div className="mb-4 bg-white p-3 rounded-lg border border-orange-100 relative z-10">
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Catatan Anda (Pilihan)</label>
+                      <textarea
+                        id="userDecisionNote"
+                        rows="2"
+                        className="w-full p-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-orange-400 resize-none"
+                        placeholder="Contoh: Saya setuju..."
+                      ></textarea>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                      <button
+                        onClick={() => {
+                          if (!confirm("Terima tawaran ini?")) return;
+                          const note = document.getElementById("userDecisionNote").value;
+                          google.script.run
+                            .withSuccessHandler((res) => {
+                              alert(res.message);
+                              setViewHistoryDetail(null);
+                              fetchHistory(user.email);
+                            })
+                            .submitUserDecision({ appId: viewHistoryDetail.appId, action: "terima", note: note });
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-sm flex justify-center items-center"
+                      >
+                        <Icons.CheckCircle className="w-5 h-5 mr-2" /> TERIMA TAWARAN
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!confirm("Tolak tawaran ini?")) return;
+                          const note = document.getElementById("userDecisionNote").value;
+                          google.script.run
+                            .withSuccessHandler((res) => {
+                              alert(res.message);
+                              setViewHistoryDetail(null);
+                              fetchHistory(user.email);
+                            })
+                            .submitUserDecision({ appId: viewHistoryDetail.appId, action: "tolak", note: note });
+                        }}
+                        className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold py-3 rounded-xl shadow-sm flex justify-center items-center"
+                      >
+                        <Icons.XCircle className="w-5 h-5 mr-2" /> TOLAK
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(viewHistoryDetail.status === "Lulus" ||
+                  viewHistoryDetail.status === "Berjaya" ||
+                  viewHistoryDetail.status === "Menunggu Persetujuan") && (
+                  <div className="pt-4 border-t border-slate-200">
+                    <button
+                      onClick={() => {
+                        setToast({ message: "Menjana surat...", type: "info" });
+                        google.script.run
+                          .withSuccessHandler((res) => {
+                            if (res.success) {
+                              const link = document.createElement("a");
+                              link.href = res.data;
+                              link.download = res.filename;
+                              link.click();
+                              setToast({ message: "Surat berjaya dimuat turun.", type: "success" });
+                            } else {
+                              alert(res.message);
+                            }
+                          })
+                          .generateOfferLetter(viewHistoryDetail.appId);
+                      }}
+                      className="w-full flex justify-center items-center bg-slate-800 hover:bg-slate-900 text-white py-4 rounded-xl font-bold shadow-lg transition-all"
+                    >
+                      <Icons.Download className="w-5 h-5 mr-2" /> MUAT TURUN SURAT TAWARAN (PDF)
+                    </button>
+                    <p className="text-center text-[10px] text-slate-400 mt-2">*Sila cetak surat ini dan bawa semasa urusan perjanjian.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-white border-t border-slate-200 flex justify-center">
+                <button
+                  onClick={() => setViewHistoryDetail(null)}
+                  className="w-full md:w-auto px-10 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // --- APP UTAMA ---
+  const App = () => {
+    // State untuk Maintenance
+    const [maintenanceList, setMaintenanceList] = useState([]);
+    const [showReportModal, setShowReportModal] = useState(false);
+    const [reportForm, setReportForm] = useState({ asset: "", issue: "" });
+    const [viewHistoryDetail, setViewHistoryDetail] = useState(null);
+
+    const [showSignModal, setShowSignModal] = useState(false);
+    const [signData, setSignData] = useState({ appId: null, name: "", ic: "" });
+    const [signatureImg, setSignatureImg] = useState(null); // Simpan gambar sign
+    const [showCalendarAsset, setShowCalendarAsset] = useState(null); // State untuk modal kalendar
+
+    const [view, setView] = useState("home");
+    const [categoryFilter, setCategoryFilter] = useState("");
+    const [searchTerm, setSearchTerm] = useState("");
+    const [visitorCount, setVisitorCount] = useState(12345);
+    const [user, setUser] = useState(null);
+    const [resetStep, setResetStep] = useState(1);
+    const [resetEmail, setResetEmail] = useState("");
+    const [assets, setAssets] = useState([]);
+    const [banners, setBanners] = useState([]);
+    const [history, setHistory] = useState([]);
+    const [selectedAsset, setSelectedAsset] = useState(null);
+    const [pendingAsset, setPendingAsset] = useState(null);
+    const [isWaitingListMode, setIsWaitingListMode] = useState(false);
+    const [loadingAssets, setLoadingAssets] = useState(false);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [loadingAuth, setLoadingAuth] = useState(false);
+    const [toast, setToast] = useState(null);
+    const [showChangePassModal, setShowChangePassModal] = useState(false);
+    const [taskCount, setTaskCount] = useState(0);
+    const [renewalItem, setRenewalItem] = useState(null);
+    const [sysSettings, setSysSettings] = useState(null);
+
+    // --- 1. FUNGSI FETCH ---
+    const fetchMaintenance = (email) => {
+      google.script.run
+        .withSuccessHandler((data) => setMaintenanceList(data))
+        .getMaintenanceTickets(email, "user");
+    };
+
+    const fetchHistory = (email) => {
+      setLoadingHistory(true);
+      google.script.run
+        .withSuccessHandler((data) => {
+          setHistory(data || []);
+          setLoadingHistory(false);
+        })
+        .getUserHistory(email);
+    };
+    // ----------------------------------------------------------
+
+    useEffect(() => {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "smooth", // Nampak effect naik atas dengan lancar
+      });
+    }, [view]);
+
+    useEffect(() => {
+      // Panggil data sebaik sahaja laman web dibuka
+      loadPublicData();
+
+      // Logik User Heartbeat (Kekalkan yang sedia ada)
+      setVisitorCount((prev) => prev + Math.floor(Math.random() * 5));
+      const savedUser = localStorage.getItem("lkim_user");
+      if (savedUser) {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        loadTaskCount(parsedUser.role);
+        if (typeof google !== "undefined") {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res && res.success) {
+                setUser(res.user);
+                localStorage.setItem("lkim_user", JSON.stringify(res.user));
+                google.script.run.updateUserHeartbeat(res.user.email);
+              }
+            })
+            .getUserDetails(parsedUser.email);
+        }
+      }
+    }, []); // Array kosong bermaksud "Jalankan SEKALI sahaja bila page load"
+
+    useEffect(() => {
+      if (user && user.email && (view === "profil" || view === "history")) {
+        fetchHistory(user.email);
+
+        // Pastikan fungsi fetchMaintenance wujud sebelum panggil
+        if (typeof fetchMaintenance === "function") {
+          fetchMaintenance(user.email);
+        }
+      }
+    }, [view, user]);
+
+    useEffect(() => {
+      if (!user?.email) return;
+      const heartbeat = setInterval(() => {
+        if (typeof google !== "undefined") google.script.run.updateUserHeartbeat(user.email);
+      }, 120000);
+      return () => clearInterval(heartbeat);
+    }, [user]);
+
+    // --- KEMASKINI: loadPublicData (Anti-Cache) ---
+    const loadPublicData = () => {
+      setLoadingAssets(true);
+      if (typeof google !== "undefined") {
+        // Kita hantar timestamp semasa supaya browser tak guna data lama (Cache)
+        const timestamp = new Date().getTime();
+
+        google.script.run
+          .withSuccessHandler((data) => {
+            // Pastikan data yang diterima adalah Array, jika tidak letak []
+            setAssets(data.assets || []);
+            setBanners(data.banners || []);
+            setSysSettings(data.settings || null);
+            setLoadingAssets(false);
+          })
+          .withFailureHandler((err) => {
+            console.log("Ralat loading data:", err);
+            setLoadingAssets(false);
+          })
+          .getPublicData(timestamp); // Hantar dummy parameter
+      }
+    };
+
+    // Fungsi untuk tarik jumlah tugasan
+    const loadTaskCount = (userRole) => {
+      if (["admin", "staff", "approver"].includes(userRole)) {
+        google.script.run
+          .withSuccessHandler((count) => setTaskCount(count))
+          .getPendingTaskCount(userRole);
+      }
+    };
+
+    const calculateVacancy = (categoryKeyword) => {
+      // Cari aset dalam kategori
+      const filtered = assets.filter((a) => a.kategori && a.kategori.toLowerCase().includes(categoryKeyword.toLowerCase()));
+
+      // JUMLAHKAN realVacancy (Nilai yang dah ditolak kelulusan)
+      const totalAvailable = filtered.reduce((sum, asset) => sum + (asset.realVacancy || 0), 0);
+
+      if (totalAvailable > 0) {
+        return (
+          <div className="flex items-center">
+            <span className="relative flex h-2 w-2 mr-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span className="text-green-700 font-bold text-sm">{totalAvailable} Kekosongan</span>
+          </div>
+        );
+      } else {
+        return <span className="text-red-500 font-bold text-sm bg-red-50 px-2 py-0.5 rounded">Tiada Kekosongan</span>;
+      }
+    };
+
+    // Helper: Kira Baki Hari Tamat Kontrak
+    const getDaysLeft = (startDateStr, durationStr) => {
+      if (!startDateStr || !durationStr) return 999;
+
+      // Tukar format string "DD/MM/YYYY" kepada Date Object JavaScript
+      // (Andaian format tarikh dari sheet ialah DD/MM/YYYY hasil formatDateDMY)
+      const parts = startDateStr.split("/");
+      // parts[0] = DD, parts[1] = MM, parts[2] = YYYY
+      // new Date(YYYY, MM-1, DD)
+      const start = new Date(parts[2], parts[1] - 1, parts[0]);
+
+      if (isNaN(start.getTime())) return 999;
+
+      // Kira Tarikh Tamat (Anggaran kasar)
+      const end = new Date(start);
+      const duration = parseInt(durationStr.replace(/[^0-9]/g, "")) || 0;
+      const unit = durationStr.toLowerCase();
+
+      if (unit.includes("tahun") || unit.includes("year")) end.setFullYear(end.getFullYear() + duration);
+      else if (unit.includes("bulan") || unit.includes("month")) end.setMonth(end.getMonth() + duration);
+      else if (unit.includes("hari") || unit.includes("day")) end.setDate(end.getDate() + duration);
+      else end.setMonth(end.getMonth() + duration); // Default bulan
+
+      // Kira beza hari dari SEKARANG
+      const today = new Date();
+      const diffTime = end - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      return diffDays;
+    };
+
+    const handleCategoryClick = (category) => {
+      setCategoryFilter(category);
+      setSearchTerm("");
+      setView("listing");
+      window.scrollTo(0, 0);
+    };
+
+    const handleApplyClick = (asset) => {
+      // Jika Maintenance, jangan buat apa-apa
+      if (asset.status === "Penyelenggaraan") return;
+
+      // Tentukan Mod: Jika Penuh -> Waiting List, Jika Aktif -> Permohonan Biasa
+      const isFull = asset.status === "Penuh" || asset.status === "Penuh (Manual)";
+      setIsWaitingListMode(isFull);
+
+      if (user) {
+        setSelectedAsset(asset);
+        setView("form");
+      } else {
+        setPendingAsset(asset);
+        setToast({
+          message: isFull
+            ? "Sila log masuk untuk mendaftar ke senarai menunggu."
+            : "Sila log masuk atau daftar akaun untuk meneruskan permohonan.",
+          type: "info",
+        });
+        setView("login");
+      }
+    };
+
+    const handleLogin = (e) => {
+      e.preventDefault();
+      setLoadingAuth(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingAuth(false);
+          if (res.success) {
+            localStorage.setItem("lkim_user", JSON.stringify(res.user));
+            setUser(res.user);
+            if (res.user.role === "admin") {
+              setView("admin");
+            } else {
+              if (pendingAsset) {
+                setSelectedAsset(pendingAsset);
+                setPendingAsset(null);
+                setView("form");
+              } else {
+                setView("home");
+              }
+            }
+          } else setToast({ message: res.message, type: "error" });
+        })
+        .loginUser(e.target.email.value, e.target.password.value);
+    };
+
+    const handleLogout = () => {
+      localStorage.removeItem("lkim_user");
+      setUser(null);
+      setView("home");
+    };
+
+    const handleSubmitApplication = (e) => {
+      e.preventDefault();
+
+      if (!selectedAsset) {
+        alert("Sila pilih aset.");
+        return;
+      }
+
+      setLoadingAuth(true);
+      const form = e.target;
+
+      // Safety Check untuk harga
+      const safeHarga = selectedAsset.harga === undefined || selectedAsset.harga === null ? "0" : String(selectedAsset.harga);
+
+      const appData = {
+        // Data User
+        email: user.email,
+        nama: user.nama,
+        noTelefon: user.noTelefon,
+        syarikat: user.syarikat || "-",
+
+        // Data Form Input
+        noIc: form.noIc.value,
+        alamat: form.alamat.value,
+        pekerjaan: form.pekerjaan.value,
+        pendapatan: form.pendapatan.value,
+
+        // --- PEMBETULAN DISINI ---
+        lokasi: selectedAsset.nama + " - " + selectedAsset.lokasi, // Ambil .lokasi
+        jenisAset: selectedAsset.kategori, // Ambil .kategori (JANGAN GUNA .jenis atau .jenisAset)
+        hargaAsal: safeHarga,
+        // -------------------------
+
+        // Data Sewaan
+        tarikhMula: form.tarikhMula.value,
+        tempoh: form.tempoh.value,
+        tujuan: form.tujuan.value,
+      };
+
+      console.log("Data dihantar:", appData); // Boleh semak di Console
+
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingAuth(false);
+          if (res.success) {
+            setToast({ message: res.message, type: "success" });
+            setSelectedAsset(null);
+            loadPublicData();
+            if (view === "profil") fetchHistory(user.email);
+            setView("history");
+          } else {
+            setToast({ message: "Gagal: " + res.message, type: "error" });
+          }
+        })
+        .withFailureHandler((err) => {
+          setLoadingAuth(false);
+          setToast({ message: "Ralat: " + err.message, type: "error" });
+        })
+        .submitApplication(appData);
+    };
+
+    const handleRequestReset = (e) => {
+      e.preventDefault();
+      setLoadingAuth(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingAuth(false);
+          if (res.success) {
+            setResetEmail(e.target.email.value);
+            setResetStep(2);
+            setToast({ message: res.message, type: "success" });
+          } else setToast({ message: res.message, type: "error" });
+        })
+        .requestPasswordReset(e.target.email.value);
+    };
+
+    const handleVerifyReset = (e) => {
+      e.preventDefault();
+      setLoadingAuth(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingAuth(false);
+          if (res.success) {
+            setToast({ message: res.message, type: "success" });
+            setView("login");
+            setResetStep(1);
+          } else setToast({ message: res.message, type: "error" });
+        })
+        .verifyAndResetPassword(resetEmail, e.target.otp.value, e.target.newPass.value);
+    };
+
+    const Toast = () =>
+      toast && (
+        <div
+          className={`fixed bottom-4 right-4 p-4 rounded-lg shadow-2xl z-50 text-white flex items-center animate-fade-in ${
+            toast.type === "error" ? "bg-red-600" : "bg-green-600"
+          }`}
+        >
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-3">
+            <Icons.X className="h-4 w-4" />
+          </button>
+        </div>
+      );
+
+    // --- NAVBAR HYBRID (FIX: LOGO CRASH & DRIVE LINK) ---
+    const Navbar = ({ settings }) => {
+      
+      // State untuk kesan jika gambar rosak/crash
+      const [imgError, setImgError] = React.useState(false);
+
+      // 1. Helper: Betulkan Link Google Drive (Supaya jadi gambar, bukan link download)
+      const getImgSrc = (url) => {
+        if (!url) return "";
+        // Jika link dari Google Drive
+        if (url.includes("drive.google.com")) {
+            // Cuba dapatkan File ID
+            const idMatch = url.match(/id=([^&]+)/) || url.match(/\/d\/([^/]+)/);
+            if (idMatch && idMatch[1]) {
+                // Guna link thumbnail Google (sz=s1000 maksudnya saiz besar 1000px)
+                // Ini lebih stabil dan laju daripada link 'uc?export=view'
+                return "https://drive.google.com/thumbnail?id=" + idMatch[1] + "&sz=s1000";
+            }
+        }
+        return url;
+      };
+
+      // 2. Data & Fallback
+      const title = settings?.title || "PORTAL SEWAAN"; 
+      const subtitle = settings?.subtitle || "Lembaga Kemajuan Ikan Malaysia";
+      const defaultLogo = "https://upload.wikimedia.org/wikipedia/ms/2/28/Logo_LKIM.png";
+      
+      // Ambil logo dari settings, dan proses linknya
+      const rawLogoUrl = settings?.logo || ""; 
+      const finalLogoUrl = getImgSrc(rawLogoUrl);
+
+      // Reset error jika logo url berubah (contohnya user upload baru)
+      React.useEffect(() => {
+        setImgError(false);
+      }, [rawLogoUrl]);
+
+      return (
+        <header className="sticky top-4 z-50 mx-4 md:mx-8 rounded-2xl transition-all duration-300 glass-panel">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-transparent to-orange-500/5 pointer-events-none"></div>
+  
+          <div className="container mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center relative z-10">
+            {/* 1. KIRI: JENAMA (DYNAMIC) */}
+            <div className="flex items-center cursor-pointer group" onClick={() => setView("home")}>
+                <div className="flex items-center group">
+                  {/* LOGIK LOGO: Container disesuaikan supaya nampak lebih 'flat' & professional seperti agensi kerajaan */}
+                  {finalLogoUrl && finalLogoUrl !== defaultLogo && !imgError ? (
+                    <div className="p-1 mr-4 transition-transform duration-300 group-hover:scale-105">
+                      <img 
+                        src={finalLogoUrl} 
+                        className="h-16 w-auto object-contain" // Saiz h-16 lebih sesuai untuk logo landscape LKIM
+                        alt="Logo Rasmi" 
+                        onError={(e) => {
+                          e.target.onerror = null; 
+                          setImgError(true);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    // Fallback: Menggunakan warna biru korporat LKIM
+                    <div className="p-3 bg-[#00529b] rounded-full mr-4 shadow-md group-hover:scale-105 transition-transform duration-300">
+                      <Icons.Building className="h-8 w-8 text-white" />
+                    </div>
+                  )}
+
+                  {/* STRUKTUR TAJUK: Mengikut hierarki gambar LKIM */}
+                  <div className="flex flex-col justify-center border-l-2 border-slate-200 pl-4">
+                    {/* Label Kecil di atas (Contoh: PORTAL RASMI) */}
+                    <span className="text-[10px] font-medium text-blue-600 tracking-widest uppercase leading-none mb-1">
+                      Portal Rasmi
+                    </span>
+
+                    {/* Tajuk Utama (Contoh: LEMBAGA KEMAJUAN IKAN MALAYSIA) */}
+                    <h1 className="text-2xl font-black tracking-tighter text-[#004a87] font-sans leading-[0.9] uppercase transition-colors group-hover:text-blue-800">
+                      {title || "Lembaga Kemajuan Ikan Malaysia"}
+                    </h1>
+
+                    {/* Sub-tajuk (Contoh: Kementerian Pertanian...) */}
+                    <p className="text-[11px] font-semibold text-slate-600 tracking-normal mt-1 leading-tight capitalize">
+                      {subtitle || "Kementerian Pertanian dan Keterjaminan Makanan"}
+                    </p>
+                  </div>
+                </div>
+            </div>
+  
+            {/* 2. MENU PILLS */}
+            <div className="hidden md:flex items-center space-x-2 bg-white/50 p-1.5 rounded-full border border-white/40 shadow-inner mt-3 md:mt-0">
+              {["home", "history", "admin"].map((tab) => {
+                if (tab === "history" && !user) return null;
+                if (tab === "admin" && (!user || !["admin", "staff", "approver"].includes(user.role))) return null;
+  
+                const labels = { home: "Utama", history: "Permohonan Saya", admin: "Panel Admin" };
+                const icons = { home: Icons.Home, history: Icons.FileText, admin: Icons.Settings };
+                const TabIcon = icons[tab];
+                const isActive = view === tab;
+  
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setView(tab);
+                      if (tab === "home" && typeof loadPublicData !== "undefined") loadPublicData();
+                    }}
+                    className={`flex items-center px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 ${
+                      isActive 
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30" 
+                      : "text-slate-600 hover:bg-white/80 hover:text-blue-600"
+                    }`}
+                  >
+                    <TabIcon className={`w-3.5 h-3.5 mr-2`} />
+                    {labels[tab]}
+                     {tab === "admin" && taskCount > 0 && (
+                      <span className="ml-2 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full animate-pulse">{taskCount}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+  
+            {/* 3. KANAN: LOGIN / PROFIL */}
+            <div className="flex items-center mt-3 md:mt-0 relative z-50">
+              {user ? (
+                <div
+                  onClick={() => setView("profil")}
+                  className="
+                    flex items-center gap-3 cursor-pointer group 
+                    pl-1.5 pr-4 py-1.5 rounded-full 
+                    bg-white/10 hover:bg-white/20 
+                    backdrop-blur-md 
+                    border border-white/30 border-b-white/10 border-r-white/10
+                    shadow-[0_4px_30px_rgba(0,0,0,0.1)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.15)]
+                    transition-all duration-300 ease-out hover:-translate-y-0.5
+                  "
+                >
+                  {/* 1. AVATAR TIMBUL */}
+                  <div className="relative">
+                    <div className="h-10 w-10 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white font-extrabold text-sm shadow-lg ring-2 ring-white ring-offset-2 ring-offset-transparent group-hover:scale-105 transition-transform">
+                      {user.nama ? user.nama.substring(0, 2).toUpperCase() : "US"}
+                    </div>
+                    {/* Status Indicator Hijau (Optional) */}
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                  </div>
+
+                  {/* 2. TEKS INFO */}
+                  <div className="hidden md:flex flex-col items-end text-right">
+                    <p className="text-xs font-bold text-slate-800 group-hover:text-blue-700 transition-colors leading-tight drop-shadow-sm">
+                      {user.nama.split(" ")[0]}
+                    </p>
+                    <span className="text-[9px] font-black text-blue-600 tracking-wider uppercase bg-blue-50/50 px-1.5 rounded-sm mt-0.5 border border-blue-100">
+                      {user.role}
+                    </span>
+                  </div>
+
+                  {/* 3. PEMISAH KACA */}
+                  <div className="h-8 w-px bg-gradient-to-b from-transparent via-slate-300 to-transparent mx-1 opacity-50"></div>
+
+                  {/* 4. TOMBOL LOGOUT */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLogout();
+                    }}
+                    className="
+                      p-2 rounded-full 
+                      text-slate-500 hover:text-red-600 
+                      hover:bg-red-50/80 
+                      transition-all duration-200 
+                      hover:rotate-90 active:scale-90
+                    "
+                    title="Log Keluar"
+                  >
+                    <Icons.LogOut className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                /* 5. TOMBOL LOGIN (GLOSSY BUTTON) */
+                <button
+                  onClick={() => setView("login")}
+                  className="
+                    group relative px-6 py-2.5 rounded-full 
+                    bg-gradient-to-b from-blue-600 to-blue-800 
+                    text-sm font-bold text-white 
+                    shadow-[0_4px_14px_0_rgba(0,118,255,0.39)] 
+                    hover:shadow-[0_6px_20px_rgba(0,118,255,0.23)] 
+                    hover:-translate-y-0.5 active:scale-95
+                    transition-all duration-300 
+                    overflow-hidden border border-blue-400/30
+                  "
+                >
+                  {/* Efek Kilat (Shine) di bahagian atas butang */}
+                  <div className="absolute top-0 left-0 w-full h-1/2 bg-white/10 blur-[1px]"></div>
+                  
+                  {/* Efek Hover Background */}
+                  <div className="absolute inset-0 bg-blue-600 opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                  
+                  <div className="relative flex items-center z-10">
+                    <Icons.LogIn className="mr-2 h-4 w-4 text-orange-300 drop-shadow-sm" /> 
+                    <span className="drop-shadow-md">Log Masuk</span>
+                  </div>
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+      );
+    };
+
+    // --- FUNGSI BARU: LIHAT DRAF PERJANJIAN ---
+    const handlePreview = () => {
+      // Semak jika ada ID
+      if (!signData || !signData.appId) {
+        alert("Ralat: ID Permohonan tidak dijumpai.");
+        return;
+      }
+      
+      setLoadingAuth(true); // Tunjuk loading indicator
+
+      google.script.run
+        .withSuccessHandler((res) => {
+           setLoadingAuth(false);
+           if(res.success) {
+              // Buka tetingkap popup baru (saiz A4-ish)
+              const win = window.open("", "Draf Perjanjian", "width=850,height=800,scrollbars=yes");
+              if (win) {
+                  win.document.write("<html><head><title>Draf Perjanjian</title></head><body>");
+                  win.document.write(res.html);
+                  win.document.write("</body></html>");
+                  win.document.close(); // Penting supaya browser berhenti loading
+              } else {
+                  alert("Sila benarkan 'Pop-up' di browser anda untuk melihat draf.");
+              }
+           } else {
+              alert(res.message);
+           }
+        })
+        .withFailureHandler((err) => {
+            setLoadingAuth(false);
+            alert("Ralat Server: " + err.message);
+        })
+        .getOfferLetterContent(signData.appId);
+    };
+
+    const handleGeneratePDF = async () => {
+      if (!signatureImg) return alert("Sila tandatangan dahulu.");
+      setLoadingAuth(true);
+
+      // Guna library jsPDF yang kita load tadi
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // 1. Header Surat
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.text("PERJANJIAN PENYEWAAN ASET LKIM", 105, 20, null, null, "center");
+
+      // 2. Isi Kandungan (Ringkas)
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      const content = `
+    PERJANJIAN INI dibuat pada hari ini antara LEMBAGA KEMAJUAN IKAN MALAYSIA (LKIM)
+    dan Penyewa di bawah:
+    
+    NAMA PENYEWA: ${signData.name}
+    NO. KAD PENGENALAN: ${signData.ic}
+    ID PERMOHONAN: ${signData.appId}
+    
+    SYARAT-SYARAT UTAMA:
+    1. Penyewa bersetuju membayar sewa bulanan tepat pada masanya.
+    2. Penyewa tidak dibenarkan mengubah suai struktur aset tanpa kebenaran.
+    3. LKIM berhak menamatkan perjanjian jika penyewa melanggar syarat.
+    4. Aset hendaklah dikembalikan dalam keadaan baik.
+    
+    Dengan menandatangani dokumen ini secara digital, saya mengaku telah membaca
+    dan bersetuju dengan segala syarat yang ditetapkan.
+    `;
+
+      doc.text(content, 20, 40);
+
+      // 3. Masukkan Tandatangan (Imej dari Canvas)
+      doc.text("Tandatangan Penyewa:", 20, 130);
+      // addImage(imageData, format, x, y, width, height)
+      doc.addImage(signatureImg, "PNG", 20, 135, 50, 25);
+
+      doc.text("Tarikh: " + new Date().toLocaleDateString(), 20, 165);
+
+      // 4. Tukar PDF ke Base64 String
+      const pdfBase64 = doc.output("datauristring");
+
+      // 5. Hantar ke Backend
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingAuth(false);
+          if (res.success) {
+            setToast({ message: "Perjanjian berjaya disimpan!", type: "success" });
+            setShowSignModal(false);
+            setSignatureImg(null); // Reset
+            fetchHistory(user.email); // Refresh data
+          } else {
+            alert("Gagal: " + res.message);
+          }
+        })
+        .saveSignedAgreement(signData.appId, pdfBase64);
+    };
+
+    return (
+      <div className="min-h-screen font-sans flex flex-col bg-[#F8FAFC] selection:bg-orange-100 selection:text-orange-900 relative">
+        {/* BACKGROUND MESH GRADIENT (DIPERKUATKAN UNTUK EFEK KACA) */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          {/* Blob Biru di Kiri Atas */}
+          <div className="absolute top-[-10%] left-[-5%] w-[50%] h-[50%] rounded-full bg-blue-200/40 blur-[100px] animate-pulse-slow"></div>
+
+          {/* Blob Oren di Kanan Bawah */}
+          <div
+            className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-orange-200/30 blur-[100px] animate-pulse-slow"
+            style={{ animationDelay: "2s" }}
+          ></div>
+
+          {/* Blob Tengah (Putih/Biru Muda) untuk brightness */}
+          <div className="absolute top-[40%] left-[30%] w-[30%] h-[30%] rounded-full bg-blue-100/30 blur-[80px]"></div>
+        </div>
+
+        {/* Kandungan Utama (Atas Mesh) */}
+        <div className="relative z-10 flex flex-col flex-grow">
+          <Navbar settings={sysSettings} />
+          <main className="max-w-7xl mx-auto px-4 py-8 flex-grow w-full">
+            <Toast />
+            {view === "admin" && user && (
+              <AdminDashboard
+                user={user}
+                setToast={setToast}
+                onUpdate={loadPublicData}
+              />
+            )}
+            {view === "home" && (
+              <div className="animate-fade-in">
+                {/* --- WIDGET TUGASAN STAFF (Hanya muncul jika ada tugasan) --- */}
+                {user && taskCount > 0 && ["admin", "staff", "approver"].includes(user.role) && (
+                  <div className="mb-6 bg-white border-l-4 border-red-500 rounded-r-xl shadow-md p-4 flex items-center justify-between animate-pulse-slow">
+                    <div className="flex items-center">
+                      <div className="bg-red-100 p-2 rounded-full mr-3 text-red-600">
+                        <Icons.AlertCircle className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-800 text-lg">Perhatian {user.nama.split(" ")[0]}!</h3>
+                        <p className="text-slate-600 text-sm">
+                          Terdapat <strong className="text-red-600 text-lg">{taskCount}</strong> permohonan baru yang memerlukan tindakan anda segera.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setView("admin")}
+                      className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow transition-transform hover:scale-105 text-sm"
+                    >
+                      Semak Sekarang &rarr;
+                    </button>
+                  </div>
+                )}
+
+                <HeroCarousel banners={banners} />
+                <div className="text-center mb-12 relative">
+                  <span className="text-teal-600 font-bold tracking-widest text-xs uppercase mb-2 block">Pilihan Terbaik Untuk Anda</span>
+                  <h2 className="text-4xl md:text-5xl font-extrabold text-slate-800 tracking-tight mb-4">
+                    Terokai <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-600">Aset Eksklusif</span> LKIM
+                  </h2>
+                  <p className="mt-4 text-slate-500 max-w-2xl mx-auto text-lg leading-relaxed">
+                    Daripada kuarters selesa hingga ruang niaga strategik, kami menyediakan fasiliti terbaik untuk memacu komuniti perikanan dan usahawan.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-12 px-2">
+                  {[
+                    {
+                      id: "Kuarters",
+                      title: "KUARTERS KERAJAAN",
+                      desc: "Kediaman selesa untuk penjawat awam.",
+                      icon: Icons.Home,
+                      color: "from-blue-600 to-blue-800", // Warna dilaraskan sedikit cerah untuk glow
+                    },
+                    {
+                      id: "Kompleks",
+                      title: "KOMPLEKS LKIM",
+                      desc: "Pusat operasi pendaratan ikan bersepadu.",
+                      icon: Icons.Layout,
+                      color: "from-indigo-600 to-indigo-800",
+                    },
+                    {
+                      id: "Pasar Nelayan",
+                      title: "PASAR NELAYAN",
+                      desc: "Tapak jualan hasil laut segar.",
+                      icon: Icons.ShoppingBag,
+                      color: "from-green-500 to-emerald-700",
+                    },
+                    {
+                      id: "Bilik Sejuk",
+                      title: "BILIK SEJUK",
+                      desc: "Kemudahan penyimpanan sejuk beku.",
+                      icon: Icons.Server,
+                      color: "from-cyan-500 to-cyan-700",
+                    },
+                    {
+                      id: "Jeti",
+                      title: "JETI PENDARATAN",
+                      desc: "Infrastruktur pendaratan bot.",
+                      icon: Icons.Anchor,
+                      color: "from-blue-500 to-blue-700",
+                    },
+                    {
+                      id: "Slipway",
+                      title: "SLIPWAY",
+                      desc: "Fasiliti penyelenggaraan bot nelayan.",
+                      icon: Icons.Tool,
+                      color: "from-orange-500 to-orange-700",
+                    },
+                    {
+                      id: "Tanah",
+                      title: "TANAH & LOT",
+                      desc: "Tanah industri untuk dimajukan.",
+                      icon: Icons.Map,
+                      color: "from-emerald-600 to-teal-800",
+                    },
+                    {
+                      id: "Lot Kedai",
+                      title: "RUANG NIAGA",
+                      desc: "Peluang perniagaan strategik.",
+                      icon: Icons.Store,
+                      color: "from-purple-600 to-purple-800",
+                    },
+                    {
+                      id: "CCDC",
+                      title: "LATIHAN & DEWAN",
+                      desc: "Pusat pembangunan & dewan serbaguna.",
+                      icon: Icons.Users,
+                      color: "from-slate-600 to-slate-800",
+                    },
+                  ].map((cat) => (
+                    <div
+                      key={cat.id}
+                      onClick={() => handleCategoryClick(cat.id)}
+                      className="group relative cursor-pointer"
+                    >
+                      {/* 1. AMBIENT GLOW (Efek Cahaya Belakang - Ikut warna kategori) */}
+                      <div className={`absolute inset-2 bg-gradient-to-br ${cat.color} rounded-[2rem] blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-500 transform translate-y-4 group-hover:translate-y-6 scale-90 group-hover:scale-105 -z-10`}></div>
+
+                      {/* 2. BODY KAD UTAMA (Kaca Tebal) */}
+                      <div className="relative h-full bg-gradient-to-br from-white/90 via-white/60 to-white/40 backdrop-blur-2xl rounded-[2rem] p-[1px] shadow-xl transition-all duration-500 group-hover:-translate-y-2 group-hover:shadow-2xl border-t border-l border-white/80">
+                        
+                        {/* Border Gelap Nipis (Bawah/Kanan) untuk efek timbul */}
+                        <div className="absolute inset-0 rounded-[2rem] border-b border-r border-black/5 pointer-events-none"></div>
+
+                        {/* Isi Dalam Kad */}
+                        <div className="relative h-full bg-white/20 rounded-[1.9rem] p-7 flex flex-col overflow-hidden">
+                            
+                            {/* Hiasan Kilauan (Shine Effect) */}
+                            <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/50 rounded-full blur-3xl pointer-events-none group-hover:bg-white/70 transition-colors"></div>
+
+                            {/* IKON (Floating 3D) */}
+                            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${cat.color} flex items-center justify-center text-white shadow-[0_10px_20px_-5px_rgba(0,0,0,0.3)] mb-6 transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 relative z-10 border border-white/20`}>
+                                <cat.icon className="h-8 w-8 drop-shadow-md" />
+                            </div>
+
+                            {/* TEKS */}
+                            <div className="relative z-10">
+                                <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight leading-none mb-3 group-hover:text-blue-900 transition-colors">
+                                    {cat.title}
+                                </h3>
+                                <p className="text-sm font-medium text-slate-600 leading-relaxed mb-6 group-hover:text-slate-800">
+                                    {cat.desc}
+                                </p>
+                            </div>
+
+                            {/* FOOTER (Kekosongan & Arrow) */}
+                            <div className="mt-auto pt-5 border-t border-white/50 flex justify-between items-center relative z-10">
+                                <div className="transition-transform duration-300 group-hover:translate-x-1">
+                                  {loadingAssets ? (
+                                      <div className="h-4 w-24 bg-slate-200/50 animate-pulse rounded-full"></div>
+                                  ) : (
+                                      calculateVacancy(cat.id)
+                                  )}
+                                </div>
+                                
+                                <div className={`w-10 h-10 rounded-full bg-white/60 backdrop-blur-sm flex items-center justify-center text-slate-400 shadow-sm border border-white group-hover:bg-gradient-to-r ${cat.color} group-hover:text-white group-hover:border-transparent transition-all duration-500 transform group-hover:translate-x-2 group-hover:rotate-[-45deg]`}>
+                                    <Icons.ArrowRight className="w-5 h-5"/>
+                                </div>
+                            </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {view === "listing" && (
+              <div className="animate-fade-in pb-12">
+                <button
+                  onClick={() => setView("home")}
+                  className="mb-6 flex items-center text-slate-600 hover:text-blue-700 transition-colors font-semibold group bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200"
+                >
+                  <Icons.ChevronLeft className="h-4 w-4 mr-1" /> Kembali ke Utama
+                </button>
+
+                {/* Header Search & Title */}
+                <div className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <div className="mb-4 md:mb-0">
+                    <h2 className="text-2xl font-bold text-slate-800">Senarai {categoryFilter || "Aset"}</h2>
+                    <p className="text-slate-500 text-sm">Pilih aset yang sesuai dengan keperluan anda.</p>
+                  </div>
+                  <div className="relative w-full md:w-80">
+                    <Icons.Search className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Cari nama aset..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* GRID KAD REKAAN BARU */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {assets
+                    .filter(
+                      (a) =>
+                        (categoryFilter ? a.kategori.toLowerCase().includes(categoryFilter.toLowerCase()) : true) &&
+                        (searchTerm ? a.nama.toLowerCase().includes(searchTerm.toLowerCase()) : true)
+                    )
+                    .filter((asset) => asset.status !== "Ditutup")
+                    .map((asset) => {
+                      
+                      // --- LOGIK PENENTUAN ICON & WARNA MENGIKUT KATEGORI ---
+                      const getAssetStyle = (cat) => {
+                        const c = (cat || "").toLowerCase();
+                        if (c.includes("kuarters")) return { Icon: Icons.Home, color: "from-blue-900 to-blue-700" };
+                        if (c.includes("kompleks")) return { Icon: Icons.Layout, color: "from-indigo-900 to-indigo-700" };
+                        if (c.includes("pasar")) return { Icon: Icons.ShoppingBag, color: "from-green-600 to-green-500" };
+                        if (c.includes("sejuk")) return { Icon: Icons.Server, color: "from-cyan-600 to-cyan-500" };
+                        if (c.includes("jeti")) return { Icon: Icons.Anchor, color: "from-blue-600 to-blue-500" };
+                        if (c.includes("slipway")) return { Icon: Icons.Tool, color: "from-orange-600 to-orange-500" };
+                        if (c.includes("tanah")) return { Icon: Icons.Map, color: "from-emerald-800 to-emerald-600" };
+                        if (c.includes("kedai") || c.includes("niaga")) return { Icon: Icons.Store, color: "from-purple-700 to-purple-500" };
+                        if (c.includes("ccdc") || c.includes("latihan")) return { Icon: Icons.Users, color: "from-slate-700 to-slate-600" };
+                        // Default Fallback
+                        return { Icon: Icons.Layers, color: "from-slate-700 to-slate-500" };
+                      };
+
+                      const style = getAssetStyle(asset.kategori);
+                      const CatIcon = style.Icon;
+
+                      return (
+                        // --- NEW GLASS CARD DESIGN ---
+                        <div
+                          key={asset.id}
+                          className="group relative rounded-3xl overflow-hidden transition-all duration-500 hover:-translate-y-2"
+                        >
+                          {/* 1. BACKDROP BLUR & BORDER (Base Layer) */}
+                          <div className="absolute inset-0 glass-panel rounded-3xl z-0"></div>
+
+                          {/* 2. HEADER IMAGE SECTION */}
+                          <div className="relative h-56 overflow-hidden z-10 m-2 rounded-2xl shadow-inner">
+                            {/* Dynamic Gradient Background ikut kategori */}
+                            <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90 transition-transform duration-700 group-hover:scale-110`}></div>
+                            
+                            {/* Pattern Overlay */}
+                            <div className="absolute inset-0 opacity-10" style={{backgroundImage: "radial-gradient(circle, white 2px, transparent 2.5px)", backgroundSize: "20px 20px"}}></div>
+
+                            {/* Icon Center */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                                <div className="p-4 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 shadow-lg mb-2 group-hover:rotate-12 transition-transform duration-500">
+                                   <CatIcon className="h-10 w-10 drop-shadow-md" />
+                                </div>
+                                <span className="text-xs font-bold uppercase tracking-widest opacity-80">{asset.kategori}</span>
+                            </div>
+
+                            {/* Status Badge */}
+                            <div className="absolute top-3 right-3">
+                               <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase border border-white/20 shadow-sm backdrop-blur-md ${
+                                  asset.status === 'Aktif' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                               }`}>
+                                 {asset.status}
+                               </span>
+                            </div>
+                            
+                            {/* Price Badge Floating */}
+                            <div className="absolute -bottom-1 left-4 bg-white px-4 py-2 rounded-t-xl shadow-lg z-20 pb-3">
+                                <span className="text-xs font-bold text-slate-400 mr-1">RM</span>
+                                <span className="text-2xl font-black text-slate-800 tracking-tight">{asset.harga}</span>
+                                <span className="text-[10px] text-slate-400 font-medium"> /bulan</span>
+                            </div>
+                          </div>
+
+                          {/* 3. CONTENT SECTION */}
+                          <div className="relative p-6 pt-4 z-10">
+                            <h3 className="text-lg font-extrabold text-slate-800 leading-tight mb-2 group-hover:text-blue-700 transition-colors line-clamp-2 min-h-[3rem]">
+                              {asset.nama}
+                            </h3>
+                            
+                            <div className="flex items-center text-xs font-medium text-slate-500 mb-5">
+                               <Icons.MapPin className="w-3.5 h-3.5 mr-1.5 text-orange-500" />
+                               <span className="truncate">{asset.lokasi}</span>
+                            </div>
+
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                               <div className="bg-white/50 p-2 rounded-xl border border-white/60 text-center">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Kekosongan</span>
+                                  <span className={`font-black text-lg ${asset.realVacancy > 0 ? "text-green-600" : "text-red-500"}`}>{asset.kekosongan}</span>
+                               </div>
+                               <div className="bg-white/50 p-2 rounded-xl border border-white/60 text-center">
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Saiz</span>
+                                  <span className="font-bold text-slate-700 text-sm">{asset.saiz || "-"}</span>
+                               </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                               <button 
+                                 onClick={(e) => { e.stopPropagation(); setShowCalendarAsset(asset.nama); }}
+                                 className="flex-1 py-2.5 rounded-xl border border-blue-200 text-blue-600 font-bold text-xs hover:bg-blue-50 transition-colors"
+                               >
+                                 Semak Jadual
+                               </button>
+                               <button 
+                                 onClick={() => handleApplyClick(asset)}
+                                 disabled={asset.status === "Penyelenggaraan"}
+                                 className="flex-[2] py-2.5 rounded-xl bg-slate-800 text-white font-bold text-xs shadow-lg shadow-slate-800/20 hover:bg-slate-900 transition-all flex justify-center items-center"
+                               >
+                                 {asset.status === "Penuh" ? "Daftar Menunggu" : "Mohon Sekarang"} 
+                                 <Icons.ArrowRight className="w-3.5 h-3.5 ml-2" />
+                               </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* --- DALAM view === 'history' (Permohonan Saya) --- */}
+            {view === "history" && (
+              <HistoryView
+                user={user}
+                history={history}
+                fetchHistory={fetchHistory}
+                setView={setView}
+                setToast={setToast}
+                setViewHistoryDetail={setViewHistoryDetail}
+                viewHistoryDetail={viewHistoryDetail}
+                loadingHistory={loadingHistory}
+                // Tambah props yang hilang supaya modal boleh dibuka
+                setSignData={setSignData}
+                setShowSignModal={setShowSignModal}
+                setRenewalItem={setRenewalItem}
+                // Tambah setSelectedAsset jika perlu buka modal balik
+                setSelectedAsset={setSelectedAsset}
+              />
+            )}
+            {view === "login" && (
+              <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 animate-fade-in">
+                {/* --- CONTAINER UTAMA (Split Screen Card) --- */}
+                <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+                  {/* --- BAHAGIAN KIRI (INFO & STATS) --- */}
+                  <div className="md:w-1/2 bg-gradient-to-br from-blue-900 to-slate-900 p-10 text-white relative flex flex-col justify-center overflow-hidden border-r-4 border-yellow-500">
+                    {/* Corak Latar Belakang Halus */}
+                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-500 opacity-20 rounded-full blur-3xl"></div>
+
+                    <div className="relative z-10">
+                      <div className="mb-8">
+                        {/* Logo Header Login */}
+                        <img
+                          src="https://upload.wikimedia.org/wikipedia/ms/2/28/Logo_LKIM.png"
+                          className="h-20 w-auto mb-6 bg-white p-2 rounded-lg shadow-lg"
+                        />
+
+                        <h1 className="text-3xl font-extrabold tracking-tight mb-2 text-white">Sistem e-Sewaan Aset</h1>
+                        <p className="text-blue-100 text-lg font-light">Lembaga Kemajuan Ikan Malaysia</p>
+                      </div>
+
+                      {/* SENARAI CIRI (Dynamic Stats) */}
+                      <div className="space-y-6 mt-8">
+                        {/* Item 1: Kuarters Statistik */}
+                        <div className="flex items-start group">
+                          <div className="bg-white/10 p-2.5 rounded-lg mr-4 border border-white/10 group-hover:bg-teal-500/20 transition-colors">
+                            <Icons.Home className="h-6 w-6 text-teal-200" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-lg">{assets ? assets.length : "..."} Unit Aset</h3>
+                            <p className="text-sm text-teal-100 opacity-80">
+                              {assets ? assets.filter((a) => a.status === "Aktif" || a.kekosongan > 0).length : "..."} unit masih tersedia untuk
+                              disewa
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Item 2: Permohonan Online */}
+                        <div className="flex items-start group">
+                          <div className="bg-white/10 p-2.5 rounded-lg mr-4 border border-white/10 group-hover:bg-teal-500/20 transition-colors">
+                            <Icons.FileText className="h-6 w-6 text-teal-200" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-lg">Permohonan Online</h3>
+                            <p className="text-sm text-teal-100 opacity-80">Mohon sewaan aset secara digital sepenuhnya</p>
+                          </div>
+                        </div>
+
+                        {/* Item 3: Real-time Data */}
+                        <div className="flex items-start group">
+                          <div className="bg-white/10 p-2.5 rounded-lg mr-4 border border-white/10 group-hover:bg-teal-500/20 transition-colors">
+                            <Icons.Refresh className="h-6 w-6 text-teal-200" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-lg">Data 'Real-time'</h3>
+                            <p className="text-sm text-teal-100 opacity-80">Status kekosongan dikemas kini automatik</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* --- BAHAGIAN KANAN (BORANG LOGIN) --- */}
+                  <div className="md:w-1/2 bg-white p-8 md:p-12 flex flex-col justify-center">
+                    {/* Tab Navigation (Log Masuk / Daftar) */}
+                    <div className="flex border-b border-gray-200 mb-8">
+                      <button className="w-1/2 pb-4 text-center font-bold text-teal-700 border-b-2 border-teal-600 transition-all">Log Masuk</button>
+                      <button
+                        onClick={() => setView("register")}
+                        className="w-1/2 pb-4 text-center font-bold text-gray-400 hover:text-gray-600 transition-all"
+                      >
+                        Daftar Akaun
+                      </button>
+                    </div>
+
+                    <div className="mb-6 text-center md:text-left">
+                      <h2 className="text-2xl font-extrabold text-slate-800">Log Masuk</h2>
+                      <p className="text-slate-500 text-sm mt-1">Sila masukkan maklumat akaun anda</p>
+                    </div>
+
+                    <form onSubmit={handleLogin} className="space-y-5">
+                      {/* Input Email */}
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                          Email atau No. KP <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.User className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="email"
+                            type="email"
+                            required
+                            placeholder="cth: user@email.com"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Input Password */}
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                          Kata Laluan <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative group">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.Lock className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="password"
+                            type="password"
+                            required
+                            placeholder="Masukkan kata laluan"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm"
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer text-gray-400 hover:text-gray-600">
+                            {/* Optional: Boleh tambah toggle show password logic disini nanti */}
+                            <Icons.Eye className="h-5 w-5" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Options: Ingat Saya & Lupa Password */}
+                      <div className="flex items-center justify-between text-sm">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500" />
+                          <span className="text-gray-600">Ingat saya</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setView("forgot_password");
+                            setResetStep(1);
+                          }}
+                          className="font-bold text-teal-700 hover:text-teal-900 hover:underline"
+                        >
+                          Lupa kata laluan?
+                        </button>
+                      </div>
+
+                      {/* Main Button */}
+                      <button
+                        disabled={loadingAuth}
+                        className="w-full py-3.5 bg-gradient-to-r from-teal-700 to-teal-900 hover:from-teal-800 hover:to-black text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] flex justify-center items-center"
+                      >
+                        {loadingAuth ? (
+                          <>
+                            {" "}
+                            <Icons.Loader className="animate-spin h-5 w-5 mr-2" /> Sedang Memproses...{" "}
+                          </>
+                        ) : (
+                          <>
+                            {" "}
+                            <Icons.LogIn className="h-5 w-5 mr-2" /> Log Masuk{" "}
+                          </>
+                        )}
+                      </button>
+                    </form>
+
+                    <div className="relative my-8">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-gray-200"></div>
+                      </div>
+                      <div className="relative flex justify-center text-sm">
+                        <span className="px-2 bg-white text-gray-400">atau</span>
+                      </div>
+                    </div>
+
+                    {/* Butang Daftar (Secondary) */}
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600 mb-3">Tiada akaun?</p>
+                      <button
+                        onClick={() => setView("register")}
+                        className="w-full py-3 border border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg font-bold transition-colors"
+                      >
+                        Daftar Akaun Baru di sini
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {view === "register" && (
+              <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 animate-fade-in">
+                <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+                  {/* --- KIRI: INFO (Sama seperti Login) --- */}
+                  <div className="md:w-1/2 bg-gradient-to-br from-teal-700 to-slate-800 p-10 text-white relative flex flex-col justify-center overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="absolute bottom-0 left-0 w-48 h-48 bg-teal-400 opacity-10 rounded-full blur-2xl transform -translate-x-1/4 translate-y-1/4"></div>
+                    <div className="relative z-10">
+                      <div className="mb-8">
+                        <div className="inline-flex items-center justify-center p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 mb-4 shadow-lg">
+                          <Icons.UserPlus className="h-8 w-8 text-teal-300" />
+                        </div>
+                        <h1 className="text-3xl font-extrabold tracking-tight mb-2">Pendaftaran Pengguna</h1>
+                        <p className="text-teal-100 text-lg font-light opacity-90">Sertai kami untuk akses kemudahan aset.</p>
+                      </div>
+                      <div className="space-y-4 mt-8 opacity-80 text-sm">
+                        <p className="flex items-center">
+                          <Icons.CheckCircle className="w-5 h-5 mr-3 text-teal-300" /> Akses kepada tempahan aset kerajaan
+                        </p>
+                        <p className="flex items-center">
+                          <Icons.CheckCircle className="w-5 h-5 mr-3 text-teal-300" /> Semakan status permohonan masa nyata
+                        </p>
+                        <p className="flex items-center">
+                          <Icons.CheckCircle className="w-5 h-5 mr-3 text-teal-300" /> Notifikasi kelulusan pantas
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* --- KANAN: BORANG DAFTAR --- */}
+                  <div className="md:w-1/2 bg-white p-8 md:p-12 flex flex-col justify-center">
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-gray-200 mb-6">
+                      <button
+                        onClick={() => setView("login")}
+                        className="w-1/2 pb-4 text-center font-bold text-gray-400 hover:text-gray-600 transition-all"
+                      >
+                        Log Masuk
+                      </button>
+                      <button className="w-1/2 pb-4 text-center font-bold text-teal-700 border-b-2 border-teal-600 transition-all">
+                        Daftar Akaun
+                      </button>
+                    </div>
+
+                    <div className="mb-6">
+                      <h2 className="text-2xl font-extrabold text-slate-800">Cipta Akaun Baru</h2>
+                      <p className="text-slate-500 text-sm mt-1">Lengkapkan maklumat di bawah</p>
+                    </div>
+
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setLoadingAuth(true);
+                        const data = {
+                          email: e.target.email.value,
+                          password: e.target.password.value,
+                          nama: e.target.nama.value,
+                          noTelefon: e.target.phone.value,
+                          syarikat: e.target.syarikat.value,
+                        };
+                        google.script.run
+                          .withSuccessHandler((res) => {
+                            setLoadingAuth(false);
+                            if (res.success) {
+                              setToast({ message: res.message, type: "success" });
+                              setView("login");
+                            } else setToast({ message: res.message, type: "error" });
+                          })
+                          .registerUser(data);
+                      }}
+                      className="space-y-4"
+                    >
+                      {/* Nama Penuh */}
+                      <div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.User className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="nama"
+                            type="text"
+                            required
+                            placeholder="Nama Penuh"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Syarikat & Telefon (Grid) */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.Briefcase className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="syarikat"
+                            type="text"
+                            placeholder="Syarikat (Pilihan)"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm"
+                          />
+                        </div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.Phone className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="phone"
+                            type="tel"
+                            required
+                            placeholder="No. Telefon"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Email */}
+                      <div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.Mail className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="email"
+                            type="email"
+                            required
+                            placeholder="Alamat Emel"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Password */}
+                      <div>
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icons.Lock className="h-5 w-5 text-gray-400" />
+                          </div>
+                          <input
+                            name="password"
+                            type="password"
+                            required
+                            placeholder="Cipta Kata Laluan"
+                            className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        disabled={loadingAuth}
+                        className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] mt-2"
+                      >
+                        {loadingAuth ? "Mendaftar..." : "Daftar Sekarang"}
+                      </button>
+                    </form>
+
+                    <div className="mt-6 text-center text-sm text-gray-500">
+                      Sudah mempunyai akaun?{" "}
+                      <button onClick={() => setView("login")} className="text-teal-700 font-bold hover:underline">
+                        Log Masuk
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {view === "forgot_password" && (
+              <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4 animate-fade-in">
+                <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+                  {/* --- KIRI: INFO --- */}
+                  <div className="md:w-1/2 bg-gradient-to-br from-slate-700 to-slate-900 p-10 text-white relative flex flex-col justify-center">
+                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_#ffffff_1px,_transparent_1px)] bg-[length:20px_20px]"></div>
+                    <div className="relative z-10">
+                      <div className="inline-flex items-center justify-center p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 mb-4 shadow-lg">
+                        <Icons.Key className="h-8 w-8 text-yellow-400" />
+                      </div>
+                      <h1 className="text-3xl font-extrabold tracking-tight mb-2">Reset Kata Laluan</h1>
+                      <p className="text-slate-300 text-lg font-light">Jangan risau, kami akan bantu anda mendapatkan semula akses.</p>
+                    </div>
+                  </div>
+
+                  {/* --- KANAN: BORANG RESET --- */}
+                  <div className="md:w-1/2 bg-white p-8 md:p-12 flex flex-col justify-center">
+                    <button
+                      onClick={() => setView("login")}
+                      className="self-start text-slate-400 hover:text-slate-600 flex items-center mb-6 text-sm font-semibold transition-colors"
+                    >
+                      <Icons.ChevronLeft className="h-4 w-4 mr-1" /> Kembali
+                    </button>
+
+                    {resetStep === 1 ? (
+                      <>
+                        <div className="mb-6">
+                          <h2 className="text-2xl font-extrabold text-slate-800">Lupa Kata Laluan?</h2>
+                          <p className="text-slate-500 text-sm mt-1">Masukkan emel anda untuk menerima kod OTP.</p>
+                        </div>
+
+                        <form onSubmit={handleRequestReset} className="space-y-5">
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1.5">Emel Berdaftar</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Icons.Mail className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <input
+                                name="email"
+                                type="email"
+                                required
+                                placeholder="nama@contoh.com"
+                                className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            disabled={loadingAuth}
+                            className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-bold shadow-lg transition-all"
+                          >
+                            {loadingAuth ? "Menghantar..." : "Hantar Kod OTP"}
+                          </button>
+                        </form>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-6">
+                          <h2 className="text-2xl font-extrabold text-slate-800">Tetapan Baru</h2>
+                          <p className="text-slate-500 text-sm mt-1">
+                            Kod OTP telah dihantar ke <strong>{resetEmail}</strong>
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleVerifyReset} className="space-y-5">
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1.5">Kod OTP (6 Digit)</label>
+                            <input
+                              name="otp"
+                              type="text"
+                              required
+                              placeholder="______"
+                              maxLength="6"
+                              className="w-full p-3 border border-gray-300 rounded-lg text-center tracking-[1em] font-mono text-xl font-bold text-slate-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-1.5">Kata Laluan Baru</label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Icons.Lock className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <input
+                                name="newPass"
+                                type="password"
+                                required
+                                minLength="6"
+                                placeholder="Minima 6 aksara"
+                                className="w-full pl-10 pr-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                              />
+                            </div>
+                          </div>
+                          <button
+                            disabled={loadingAuth}
+                            className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-lg transition-all flex items-center justify-center"
+                          >
+                            <Icons.CheckCircle className="w-5 h-5 mr-2" />
+                            {loadingAuth ? "Memproses..." : "Tukar Kata Laluan"}
+                          </button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- DALAM view === 'profil' (DIKEMASKINI: ADA TARIKH TAMAT) --- */}
+            {view === "profil" && (
+              <div className="animate-fade-in max-w-6xl mx-auto pb-12">
+                {/* Header Tajuk */}
+                <div className="flex items-center mb-8">
+                  <div className="w-1.5 h-8 bg-teal-600 rounded-full mr-3"></div>
+                  <h2 className="text-2xl font-extrabold text-slate-800 tracking-tight">Profil Saya</h2>
+                </div>
+
+                {/* KAD PROFIL (DIGITAL ID STYLE) */}
+                <div className="relative rounded-3xl overflow-hidden shadow-2xl mb-10 group">
+                  {/* Background ID Card */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-900 to-slate-900 z-0"></div>
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 z-0"></div>
+
+                  {/* Circle Hiasan */}
+                  <div className="absolute -top-24 -right-24 w-64 h-64 bg-orange-500 rounded-full blur-[80px] opacity-40"></div>
+                  <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500 rounded-full blur-[80px] opacity-40"></div>
+
+                  <div className="relative z-10 p-8 md:p-10 flex flex-col md:flex-row items-center md:items-start gap-8 text-white">
+                    {/* Avatar */}
+                    <div className="relative">
+                      <div className="h-32 w-32 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-4xl font-bold border-4 border-orange-500 shadow-2xl text-white">
+                        {user?.nama ? user.nama.substring(0, 2).toUpperCase() : "US"}
+                      </div>
+                      <div className="absolute bottom-0 right-0 bg-green-500 border-4 border-slate-900 w-8 h-8 rounded-full" title="Aktif"></div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-grow text-center md:text-left">
+                      <h3 className="text-3xl font-extrabold tracking-tight mb-1">{user?.nama}</h3>
+                      <p className="text-blue-200 font-mono text-sm mb-4 bg-blue-900/50 px-3 py-1 rounded-full w-fit mx-auto md:mx-0 border border-blue-700/50">
+                        {user?.email}
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 text-sm">
+                        <div className="bg-white/10 p-3 rounded-xl border border-white/10 backdrop-blur-sm">
+                          <span className="block text-orange-300 text-xs font-bold uppercase mb-1">Peranan</span>
+                          <span className="font-bold">{user?.role === "staff" ? "Kakitangan LKIM" : "Pengguna Awam"}</span>
+                        </div>
+                        <div className="bg-white/10 p-3 rounded-xl border border-white/10 backdrop-blur-sm">
+                          <span className="block text-orange-300 text-xs font-bold uppercase mb-1">Telefon</span>
+                          <span className="font-bold">{user?.noTelefon || "-"}</span>
+                        </div>
+                        <div className="bg-white/10 p-3 rounded-xl border border-white/10 backdrop-blur-sm">
+                          <span className="block text-orange-300 text-xs font-bold uppercase mb-1">Organisasi</span>
+                          <span className="font-bold truncate">{user?.syarikat || "Persendirian"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Butang Edit */}
+                    <div>
+                      <button
+                        onClick={() => setShowChangePassModal(true)}
+                        className="bg-white/10 hover:bg-white/20 text-white p-3 rounded-xl border border-white/20 transition-all backdrop-blur-md"
+                        title="Tetapan Akaun"
+                      >
+                        <Icons.Settings className="w-6 h-6" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* JADUAL REKOD ASET (DIKEMASKINI) */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                      <Icons.Home className="mr-2 text-teal-600" /> Rekod Aset (Aktif & Sejarah)
+                    </h3>
+                    <button
+                      onClick={() => fetchHistory(user.email)}
+                      className="text-teal-600 hover:text-teal-800 hover:bg-white p-2 rounded-full transition-all"
+                    >
+                      <Icons.Refresh className={`h-5 w-5 ${loadingHistory ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
+
+                  {(() => {
+                    // Tapis data: Hanya 'Berjaya' atau 'Tamat Tempoh'
+                    const assetRecords = history.filter((h) => h.status === "Berjaya" || h.status === "Tamat Tempoh");
+
+                    return (
+                      <>
+                        {loadingHistory ? (
+                          <div className="p-12 text-center text-slate-400">
+                            <Icons.Loader className="mx-auto h-8 w-8 animate-spin mb-2 text-teal-500" /> Mengemaskini data...
+                          </div>
+                        ) : assetRecords.length === 0 ? (
+                          <div className="p-12 text-center text-slate-400 italic">Tiada rekod penyewaan aset aktif atau lampau.</div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead className="bg-white text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                                <tr>
+                                  <th className="p-5">Aset / Lokasi</th>
+                                  <th className="p-5">Tempoh Sewaan</th>
+                                  <th className="p-5 text-center">Status</th>
+                                  <th className="p-5 text-center">Tindakan</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-50 bg-white">
+                                {assetRecords.map((h) => {
+                                  const daysLeft = h.status === "Berjaya" ? getDaysLeft(h.tarikhMula, h.tempoh) : 0;
+                                  const isExpiring = daysLeft <= 60 && h.status === "Berjaya";
+
+                                  // --- FUNGSI KIRA TARIKH TAMAT (DISPLAY) ---
+                                  const calculateEndDate = (startStr, durationStr) => {
+                                    if (!startStr || !durationStr) return "-";
+                                    try {
+                                      const parts = startStr.split("/");
+                                      const date = new Date(parts[2], parts[1] - 1, parts[0]);
+                                      const amt = parseInt(durationStr.replace(/[^0-9]/g, "")) || 0;
+                                      const unit = durationStr.toLowerCase();
+
+                                      if (unit.includes("tahun")) date.setFullYear(date.getFullYear() + amt);
+                                      else if (unit.includes("bulan")) date.setMonth(date.getMonth() + amt);
+                                      else if (unit.includes("hari")) date.setDate(date.getDate() + amt);
+
+                                      // Format DD/MM/YYYY
+                                      return `${date.getDate().toString().padStart(2, "0")}/${(date.getMonth() + 1)
+                                        .toString()
+                                        .padStart(2, "0")}/${date.getFullYear()}`;
+                                    } catch (e) {
+                                      return "-";
+                                    }
+                                  };
+                                  const tarikhTamat = calculateEndDate(h.tarikhMula, h.tempoh);
+                                  // ------------------------------------------
+
+                                  return (
+                                    <tr key={h.appId} className="hover:bg-teal-50/30 transition-colors">
+                                      {/* Kolum 1 */}
+                                      <td className="p-5">
+                                        <div className="font-bold text-slate-800 text-sm mb-1 whitespace-normal max-w-xs">{h.lokasi}</div>
+                                        <div className="text-xs text-slate-500">{h.jenisAset}</div>
+                                      </td>
+
+                                      {/* Kolum 2: TEMPOH SEWAAN (DIKEMASKINI) */}
+                                      <td className="p-5">
+                                        <div className="flex flex-col space-y-1">
+                                          <div className="text-xs text-slate-500 flex items-center">
+                                            <span className="w-12 font-bold text-slate-400 uppercase text-[10px]">Mula:</span>
+                                            <span className="font-mono text-slate-700">{h.tarikhMula}</span>
+                                          </div>
+                                          <div className="text-xs text-slate-500 flex items-center">
+                                            <span className="w-12 font-bold text-slate-400 uppercase text-[10px]">Tempoh:</span>
+                                            <span className="font-bold text-slate-700">{h.tempoh}</span>
+                                          </div>
+                                          {/* Baris Baru: Tarikh Tamat */}
+                                          <div className="text-xs text-slate-500 flex items-center">
+                                            <span className="w-12 font-bold text-red-400 uppercase text-[10px]">Tamat:</span>
+                                            <span className="font-mono text-red-600 font-bold">{tarikhTamat}</span>
+                                          </div>
+                                        </div>
+
+                                        {isExpiring && (
+                                          <div className="mt-2 text-[10px] text-orange-600 font-bold animate-pulse bg-orange-50 px-2 py-1 rounded w-fit border border-orange-100">
+                                            Baki {daysLeft} hari lagi
+                                          </div>
+                                        )}
+                                      </td>
+
+                                      {/* Kolum 3 */}
+                                      <td className="p-5 text-center">
+                                        <span
+                                          className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase border shadow-sm ${
+                                            h.status === "Berjaya" ? "bg-green-100 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-gray-200"
+                                          }`}
+                                        >
+                                          {h.status === "Berjaya" ? <Icons.CheckCircle className="w-3 h-3 mr-1" /> : <Icons.XCircle className="w-3 h-3 mr-1" />}
+                                          {h.status}
+                                        </span>
+                                      </td>
+
+                                      {/* Kolum 4 */}
+                                      <td className="p-5 text-center">
+                                        <div className="flex justify-center items-center space-x-2">
+                                          <button
+                                            onClick={() => setViewHistoryDetail(h)}
+                                            className="text-teal-600 hover:bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-200 text-xs font-bold transition-all flex items-center"
+                                          >
+                                            <Icons.Eye className="w-3 h-3 mr-1" /> Info
+                                          </button>
+                                          {h.status === "Berjaya" && (
+                                          <button
+                                            onClick={() => {
+                                              // Set data untuk tandatangan
+                                              setSignData({ appId: h.appId, name: user.nama, ic: user.noIc || "-" });
+                                              setShowSignModal(true);
+                                            }}
+                                            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-blue-700 transition-all flex items-center ml-2"
+                                          >
+                                            <Icons.PenTool className="w-3 h-3 mr-1" /> Sign
+                                          </button>
+                                        )}
+                                          {(h.status === "Tamat Tempoh" || isExpiring) && (
+                                            <button
+                                              onClick={() => setRenewalItem(h)}
+                                              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-green-700 transition-all flex items-center"
+                                            >
+                                              <Icons.Refresh className="w-3 h-3 mr-1" /> Sambung
+                                            </button>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                {/* --- MODUL ADUAN & PENYELENGGARAAN (BARU) --- */}
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden mt-8">
+                  <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center">
+                      <Icons.Settings className="mr-2 text-red-600" /> Aduan Kerosakan / Penyelenggaraan
+                    </h3>
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow transition-all flex items-center"
+                    >
+                      <Icons.Plus className="w-4 h-4 mr-2" /> Lapor Baru
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-white text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                        <tr>
+                          <th className="p-5">Tarikh / Tiket</th>
+                          <th className="p-5">Isu Kerosakan</th>
+                          <th className="p-5">Aset</th>
+                          <th className="p-5 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50 bg-white">
+                        {maintenanceList.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="p-8 text-center text-slate-400 italic">
+                              Tiada rekod aduan.
+                            </td>
+                          </tr>
+                        ) : (
+                          maintenanceList.map((m, idx) => (
+                            <tr key={idx} className="hover:bg-red-50/10">
+                              <td className="p-5">
+                                <span className="font-mono text-xs font-bold bg-slate-100 px-2 py-0.5 rounded">{m.id}</span>
+                                <div className="text-xs text-slate-400 mt-1">{m.date}</div>
+                              </td>
+                              <td className="p-5">
+                                <div className="text-sm font-medium text-slate-800">{m.issue}</div>
+                                {m.adminNote && m.adminNote !== "-" && (
+                                  <div className="text-xs text-slate-500 mt-1 bg-yellow-50 p-1.5 rounded border border-yellow-100 italic">
+                                    Admin: {m.adminNote}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="p-5 text-xs text-slate-600">
+                                <div className="font-bold">{m.asset}</div>
+                                <div>{m.location}</div>
+                              </td>
+                              <td className="p-5 text-center">
+                                <span
+                                  className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
+                                    m.status === "Selesai"
+                                      ? "bg-green-100 text-green-700 border-green-200"
+                                      : m.status === "Sedang Dibaiki"
+                                      ? "bg-blue-100 text-blue-700 border-blue-200"
+                                      : "bg-gray-100 text-gray-700 border-gray-200"
+                                  }`}
+                                >
+                                  {m.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================== */}
+            {/* MODAL BUTIRAN PERMOHONAN (USER VIEW) - VERSI LENGKAP */}
+            {/* ================================================================== */}
+            {viewHistoryDetail && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+                <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden border border-slate-200">
+                  {/* 1. HEADER (Clean & Prominent) */}
+                  <div className="bg-white p-5 border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
+                    <div>
+                      <h3 className="font-bold text-xl text-slate-800">Butiran Permohonan</h3>
+                      <p className="text-xs text-slate-500 font-mono mt-1">ID: {viewHistoryDetail.appId}</p>
+                    </div>
+                    <button
+                      onClick={() => setViewHistoryDetail(null)}
+                      className="p-2 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-500 rounded-full transition-colors"
+                    >
+                      <Icons.X className="h-6 w-6" />
+                    </button>
+                  </div>
+
+                  {/* 2. SCROLLABLE CONTENT AREA */}
+                  <div className="overflow-y-auto custom-scrollbar p-6 space-y-6">
+                    {/* STATUS BANNER (High Visibility) */}
+                    <div
+                      className={`flex items-center justify-between p-4 rounded-xl border ${
+                        viewHistoryDetail.status === "Lulus"
+                          ? "bg-green-50 border-green-200 text-green-800"
+                          : viewHistoryDetail.status === "Ditolak"
+                          ? "bg-red-50 border-red-200 text-red-800"
+                          : viewHistoryDetail.status === "Menunggu Persetujuan"
+                          ? "bg-orange-50 border-orange-200 text-orange-800"
+                          : "bg-blue-50 border-blue-200 text-blue-800"
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <div
+                          className={`p-2 rounded-full mr-3 ${
+                            viewHistoryDetail.status === "Lulus"
+                              ? "bg-green-200"
+                              : viewHistoryDetail.status === "Ditolak"
+                              ? "bg-red-200"
+                              : viewHistoryDetail.status === "Menunggu Persetujuan"
+                              ? "bg-orange-200"
+                              : "bg-blue-200"
+                          }`}
+                        >
+                          {viewHistoryDetail.status === "Lulus" ? (
+                            <Icons.CheckCircle className="w-6 h-6" />
+                          ) : viewHistoryDetail.status === "Ditolak" ? (
+                            <Icons.XCircle className="w-6 h-6" />
+                          ) : (
+                            <Icons.Info className="w-6 h-6" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold uppercase opacity-70 mb-0.5">Status Terkini</p>
+                          <p className="text-lg font-extrabold tracking-tight">{viewHistoryDetail.status}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* INFO GRID (Two Columns of Cards) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* LEFT CARD: MAKLUMAT ASET */}
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center border-b pb-2">
+                          <Icons.Home className="w-5 h-5 mr-2 text-blue-600" /> Maklumat Aset
+                        </h4>
+
+                        <div className="space-y-4">
+                          {/* Lokasi */}
+                          <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Lokasi / Aset</label>
+                            <div className="font-medium text-slate-800 text-sm mt-1 flex items-start">
+                              <Icons.MapPin className="w-4 h-4 mr-1.5 text-red-500 mt-0.5 flex-shrink-0" />
+                              {viewHistoryDetail.lokasi}
+                            </div>
+                          </div>
+
+                          {/* Jenis & Harga Grid */}
+                          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">Jenis</label>
+                              <p className="font-bold text-slate-700 text-sm">{viewHistoryDetail.jenisAset || "-"}</p>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">Harga Mohon</label>
+                              <p className="font-bold text-blue-600 text-sm">RM {viewHistoryDetail.hargaAsal || "0"}</p>
+                            </div>
+                          </div>
+
+                          {/* Tarikh & Tempoh */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase">Tarikh Mula</label>
+                              <p className="font-medium text-slate-700 text-sm">{viewHistoryDetail.tarikhMula}</p>
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase">Tempoh</label>
+                              <p className="font-medium text-slate-700 text-sm">{viewHistoryDetail.tempoh}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* RIGHT CARD: MAKLUMAT PEMOHON (DENGAN NO TELEFON) */}
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <h4 className="font-bold text-slate-800 text-lg mb-4 flex items-center border-b pb-2">
+                          <Icons.User className="w-5 h-5 mr-2 text-blue-600" /> Maklumat Pemohon
+                        </h4>
+
+                        <div className="space-y-4">
+                          {/* Nama Penuh */}
+                          <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase">Nama Penuh</label>
+                            <p className="font-bold text-slate-800 text-sm">{viewHistoryDetail.nama}</p>
+                          </div>
+
+                          {/* Grid No Telefon & IC */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase">No. Pengenalan</label>
+                              <div className="font-medium text-slate-700 text-sm mt-1 font-mono">{viewHistoryDetail.ic}</div>
+                            </div>
+                            <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase">No. Telefon</label>
+                              <div className="font-medium text-slate-700 text-sm mt-1 flex items-center">
+                                <Icons.Phone className="w-3.5 h-3.5 mr-1.5 text-blue-500" />
+                                {viewHistoryDetail.noTelefon || "-"}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Syarikat (Papar jika ada) */}
+                          {viewHistoryDetail.syarikat && (
+                            <div>
+                              <label className="text-xs font-bold text-slate-400 uppercase">Syarikat / Organisasi</label>
+                              <p className="font-medium text-slate-700 text-sm mt-1">{viewHistoryDetail.syarikat}</p>
+                            </div>
+                          )}
+
+                          {/* Pekerjaan & Pendapatan */}
+                          <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">Pekerjaan</label>
+                              <p className="font-medium text-slate-700 text-xs mt-0.5">{viewHistoryDetail.pekerjaan}</p>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">Pendapatan</label>
+                              <p className="font-bold text-green-600 text-sm mt-0.5">RM {viewHistoryDetail.pendapatan}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* CARD 3: NOTA / TUJUAN */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <h4 className="font-bold text-slate-800 text-sm mb-3 uppercase tracking-wide text-xs text-slate-400">Tujuan Sewaan / Catatan</h4>
+                      <p className="text-slate-600 italic bg-yellow-50 p-4 rounded-lg border border-yellow-100 text-sm leading-relaxed">
+                        "{viewHistoryDetail.tujuan || viewHistoryDetail.nota || "Tiada catatan tambahan."}"
+                      </p>
+                      <div className="mt-4 pt-3 border-t border-slate-100">
+                        <label className="text-xs font-bold text-slate-400 uppercase block mb-1">Alamat Surat Menyurat</label>
+                        <p className="text-sm text-slate-700">{viewHistoryDetail.alamat || "-"}</p>
+                      </div>
+                    </div>
+
+                    {/* CARD 4: KEPUTUSAN & ULASAN (Conditional) */}
+                    {(viewHistoryDetail.status !== "Dalam Proses" || viewHistoryDetail.ulasanStaff || viewHistoryDetail.ulasanAdmin) && (
+                      <div className="bg-gradient-to-br from-slate-100 to-white p-5 rounded-xl border border-slate-200 shadow-inner">
+                        <h4 className="font-bold text-slate-800 mb-4 flex items-center">
+                          <Icons.FileText className="w-5 h-5 mr-2 text-purple-600" /> Keputusan Pihak Pengurusan
+                        </h4>
+
+                        <div className="space-y-3">
+                          {/* Harga Lulus Highlight */}
+                          {viewHistoryDetail.hargaLulus && (
+                            <div className="flex justify-between items-center bg-white p-4 rounded-lg border border-green-100 shadow-sm">
+                              <span className="text-sm font-bold text-slate-600">Kadar Sewaan Diluluskan</span>
+                              <span className="text-xl font-extrabold text-green-700">RM {viewHistoryDetail.hargaLulus}</span>
+                            </div>
+                          )}
+
+                          {/* Ulasan Staff */}
+                          {viewHistoryDetail.ulasanStaff && (
+                            <div className="bg-white p-3 rounded-lg border border-slate-200">
+                              <span className="text-[10px] font-bold text-blue-500 uppercase block mb-1">Ulasan Penyokong</span>
+                              <p className="text-sm text-slate-700">{viewHistoryDetail.ulasanStaff}</p>
+                            </div>
+                          )}
+
+                          {/* Ulasan Admin */}
+                          {viewHistoryDetail.ulasanAdmin && (
+                            <div className="bg-white p-3 rounded-lg border border-slate-200">
+                              <span className="text-[10px] font-bold text-purple-500 uppercase block mb-1">Ulasan Pelulus</span>
+                              <p className="text-sm text-slate-700">{viewHistoryDetail.ulasanAdmin}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ACTION ZONE (Only for 'Menunggu Persetujuan') */}
+                    {viewHistoryDetail.status === "Menunggu Persetujuan" && (
+                      <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-6 shadow-md animate-pulse-slow">
+                        <div className="flex items-start mb-5">
+                          <div className="bg-orange-100 p-2 rounded-full mr-4">
+                            <Icons.AlertCircle className="w-6 h-6 text-orange-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-orange-900 text-lg">Tindakan Diperlukan</h4>
+                            <p className="text-sm text-orange-800 mt-1 leading-relaxed">
+                              Permohonan anda telah <strong>diluluskan</strong>. Sila semak kadar sewaan baru di atas. Adakah anda bersetuju untuk
+                              meneruskan sewaan ini?
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Input Nota Pengguna */}
+                        <div className="mb-5 bg-white p-3 rounded-lg border border-orange-100">
+                          <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Catatan Anda (Pilihan)</label>
+                          <textarea
+                            id="userDecisionNote"
+                            rows="2"
+                            className="w-full p-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-orange-400 resize-none"
+                            placeholder="Contoh: Saya setuju dengan kadar tersebut..."
+                          ></textarea>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <button
+                            onClick={() => {
+                              if (!confirm("Anda pasti untuk Menerima tawaran ini?")) return;
+                              const noteVal = document.getElementById("userDecisionNote").value;
+
+                              // Panggil Backend
+                              google.script.run
+                                .withSuccessHandler((res) => {
+                                  // 1. Tunjuk mesej berjaya
+                                  alert(res.message);
+
+                                  // 2. Tutup Modal
+                                  setViewHistoryDetail(null);
+                                  // (Atau setSelectedApp(null) bergantung kod anda)
+
+                                  // 3. Refresh History User (Supaya status bertukar jadi Berjaya)
+                                  if (view === "profil") fetchHistory(user.email);
+
+                                  // 4. REFRESH DATA ASET (PENTING: INI YANG HILANG)
+                                  // Ini akan tarik data kekosongan baru dari database
+                                  loadPublicData();
+                                })
+                                .submitUserDecision({
+                                  appId: viewHistoryDetail.appId,
+                                  action: "terima",
+                                  note: noteVal,
+                                });
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl shadow-sm flex justify-center items-center transition-transform active:scale-95"
+                          >
+                            <Icons.CheckCircle className="w-5 h-5 mr-2" /> TERIMA TAWARAN
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (!confirm("Anda pasti untuk Menolak tawaran ini?")) return;
+                              const noteVal = document.getElementById("userDecisionNote").value;
+                              google.script.run
+                                .withSuccessHandler((res) => {
+                                  alert(res.message);
+                                  setViewHistoryDetail(null);
+                                  if (view === "profil") fetchHistory(user.email);
+                                })
+                                .submitUserDecision({
+                                  appId: viewHistoryDetail.appId,
+                                  action: "tolak",
+                                  note: noteVal,
+                                });
+                            }}
+                            className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold py-3.5 rounded-xl shadow-sm flex justify-center items-center transition-colors"
+                          >
+                            <Icons.XCircle className="w-5 h-5 mr-2" /> TOLAK
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BUTANG DOWNLOAD SURAT TAWARAN (Hanya Jika Lulus/Berjaya) */}
+                    {(viewHistoryDetail.status === "Lulus" ||
+                      viewHistoryDetail.status === "Berjaya" ||
+                      viewHistoryDetail.status === "Menunggu Persetujuan") && (
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <button
+                          onClick={() => {
+                            setToast({ message: "Sedang menjana surat...", type: "info" });
+                            google.script.run
+                              .withSuccessHandler((res) => {
+                                if (res.success) {
+                                  // Download trick
+                                  const link = document.createElement("a");
+                                  link.href = res.data;
+                                  link.download = res.filename;
+                                  link.click();
+                                  setToast({ message: "Surat berjaya dimuat turun.", type: "success" });
+                                } else {
+                                  alert(res.message);
+                                }
+                              })
+                              .generateOfferLetter(viewHistoryDetail.appId);
+                          }}
+                          className="w-full flex justify-center items-center bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-900 transition-all shadow-lg"
+                        >
+                          <Icons.Download className="w-5 h-5 mr-2" />
+                          MUAT TURUN SURAT TAWARAN (PDF)
+                        </button>
+                        <p className="text-[10px] text-center text-slate-400 mt-2">*Sila cetak surat ini dan bawa semasa urusan perjanjian.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. FOOTER (Simple Close Action) */}
+                  <div className="p-4 bg-white border-t border-slate-200 flex justify-center">
+                    <button
+                      onClick={() => setViewHistoryDetail(null)}
+                      className="w-full md:w-auto px-10 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================================================================================= */}
+            {/* MODAL PERMOHONAN: UI MESRA PENGGUNA (ACCESSIBLE DESIGN) */}
+            {/* ================================================================================= */}
+            {selectedAsset && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm animate-fade-in">
+                {/* CARD CONTAINER */}
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 relative">
+                  {/* WATERMARK BACKGROUND (Logo Pudar di Tengah Borang) */}
+                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] z-0">
+                    <img src="https://upload.wikimedia.org/wikipedia/ms/2/28/Logo_LKIM.png" className="w-64 h-64 grayscale" />
+                  </div>
+
+                  {/* 1. HEADER RASMI LKIM (BIRU & KUNING) */}
+                  <div className="bg-blue-900 p-5 text-white flex justify-between items-center shadow-md flex-shrink-0 border-b-4 border-yellow-400 z-10 relative">
+                    <div className="flex items-center space-x-4">
+                      {/* Logo Kecil di Header */}
+                      <div className="bg-white p-1.5 rounded-full shadow-sm">
+                        <img src="https://upload.wikimedia.org/wikipedia/ms/2/28/Logo_LKIM.png" className="h-8 w-auto" alt="Logo" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg leading-none text-white font-serif tracking-wide">BORANG PERMOHONAN SEWAAN</h3>
+                        <p className="text-yellow-400 text-[10px] mt-1 font-bold uppercase tracking-widest">LEMBAGA KEMAJUAN IKAN MALAYSIA</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedAsset(null);
+                        setView("listing"); // <--- TAMBAH INI: Kembali ke laman utama
+                      }}
+                      className="bg-white/10 hover:bg-white/30 p-2 rounded-full transition-all text-white"
+                      title="Tutup"
+                    >
+                      <Icons.X className="h-6 w-6" />
+                    </button>
+                  </div>
+
+                  {/* BODY (SCROLLABLE) - Tambah 'relative z-10' supaya text duduk atas watermark */}
+                  <div className="overflow-y-auto custom-scrollbar bg-slate-50 flex-grow relative z-10">
+                    {/* 2. RINGKASAN ASET (HERO SECTION - DENGAN HARGA) */}
+                    <div className="bg-white p-6 border-b border-slate-200">
+                      <div className="flex items-start space-x-4 mb-4">
+                        <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 flex-shrink-0">
+                          <Icons.Home className="h-8 w-8 text-blue-600" />
+                        </div>
+                        <div className="flex-grow">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Anda memohon untuk:</p>
+                          <h2 className="text-xl font-extrabold text-slate-800 leading-tight mb-2">{selectedAsset.nama}</h2>
+
+                          <div className="flex flex-wrap gap-2">
+                            <span className="inline-flex items-center text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200">
+                              <Icons.MapPin className="h-3 w-3 mr-1 text-slate-400" />
+                              {selectedAsset.lokasi}
+                            </span>
+                            <span className="inline-flex items-center text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded border border-blue-100">
+                              {selectedAsset.kategori}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* BAR HARGA (TAMBAHAN BARU) */}
+                      <div className="bg-gradient-to-r from-blue-50 to-white border border-blue-100 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                        <div className="flex items-center space-x-2">
+                          <div className="p-1.5 bg-blue-100 rounded-full">
+                            <Icons.Tag className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">Kadar Sewaan</p>
+                            <p className="text-xs font-medium text-blue-900 leading-none mt-0.5">Bulanan</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-blue-600 mr-1">RM</span>
+                          <span className="text-2xl font-extrabold text-blue-800">{selectedAsset.harga}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. BORANG INPUT (LOGIK GABUNGAN: SEWA vs WAITING LIST) */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setLoadingAuth(true);
+
+                        const formElements = e.target.elements;
+
+                        // --- A. LOGIK JIKA MOD WAITING LIST ---
+                        if (isWaitingListMode) {
+                          const noteInput = formElements.tujuan;
+                          const noteValue = noteInput ? noteInput.value : "-";
+
+                          const waitingData = {
+                            assetName: selectedAsset.nama,
+                            location: selectedAsset.lokasi,
+                            name: user.nama,
+                            email: user.email,
+                            phone: user.noTelefon,
+                            note: noteValue,
+                          };
+
+                          google.script.run
+                            .withSuccessHandler((res) => {
+                              setLoadingAuth(false);
+                              if (res.success) {
+                                setToast({ message: res.message, type: "success" });
+
+                                // --- PEMBAIKAN UTAMA DI SINI ---
+                                setSelectedAsset(null); // 1. Tutup Modal
+                                setView("home"); // 2. KEMBALI KE HOME (Elak Blank Page)
+                                // -------------------------------
+                              } else {
+                                setToast({ message: res.message, type: "error" });
+                              }
+                            })
+                            .withFailureHandler((err) => {
+                              setLoadingAuth(false);
+                              setToast({ message: "Ralat Server: " + err.message, type: "error" });
+                            })
+                            .joinWaitingList(waitingData);
+
+                          return;
+                        }
+
+                        // --- B. LOGIK PERMOHONAN BIASA (ASAL) ---
+                        const safeHarga =
+                          selectedAsset.harga === undefined || selectedAsset.harga === null ? "0" : String(selectedAsset.harga);
+
+                        const appData = {
+                          // Data User
+                          email: user.email,
+                          nama: user.nama,
+                          noTelefon: user.noTelefon,
+                          syarikat: user.syarikat || "-",
+
+                          // Data Form Input
+                          noIc: formElements.noIc.value,
+                          alamat: formElements.alamat.value,
+                          pekerjaan: formElements.pekerjaan.value,
+                          pendapatan: formElements.pendapatan.value,
+
+                          // --- PEMBETULAN DISINI ---
+                          lokasi: selectedAsset.nama + " - " + selectedAsset.lokasi, // Ambil .lokasi
+                          jenisAset: selectedAsset.kategori, // Ambil .kategori (JANGAN GUNA .jenis atau .jenisAset)
+                          hargaAsal: safeHarga,
+                          // -------------------------
+
+                          // Data Sewaan
+                          tarikhMula: formElements.tarikhMula.value,
+                          tempoh: formElements.tempoh.value,
+                          tujuan: formElements.tujuan.value,
+                        };
+
+                        console.log("Data dihantar:", appData); // Boleh semak di Console
+
+                        google.script.run
+                          .withSuccessHandler((res) => {
+                            setLoadingAuth(false);
+                            if (res.success) {
+                              setToast({ message: res.message, type: "success" });
+
+                              // --- PEMBAIKAN LOGIK BIASA JUGA ---
+                              setSelectedAsset(null);
+                              loadPublicData();
+
+                              if (view === "profil") fetchHistory(user.email);
+                              setView("history"); // Ini memang dah ada, jadi selamat
+                              // ----------------------------------
+                            } else {
+                              setToast({ message: "Gagal: " + res.message, type: "error" });
+                            }
+                          })
+                          .withFailureHandler((err) => {
+                            setLoadingAuth(false);
+                            setToast({ message: "Ralat: " + err.message, type: "error" });
+                          })
+                          .submitApplication(appData);
+                      }}
+                      className="p-6 space-y-8"
+                    >
+                      {/* ... (Isi kandungan borang di bawah kekal sama seperti sebelum ini) ... */}
+
+                      {/* --- HEADER KHAS JIKA WAITING LIST --- */}
+                      {isWaitingListMode && (
+                        <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r shadow-sm mb-6">
+                          <h4 className="font-bold text-orange-800 flex items-center">
+                            <Icons.Info className="w-5 h-5 mr-2" /> Senarai Menunggu
+                          </h4>
+                          <p className="text-sm text-orange-700 mt-1">
+                            Aset ini kini <strong>PENUH</strong>. Sila isi maklumat ringkas di bawah. Pihak kami akan menghubungi anda sekiranya
+                            terdapat kekosongan di masa hadapan.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* SEKSYEN A: MAKLUMAT PEMOHON (COMMON) */}
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <h4 className="font-bold text-slate-800 text-lg mb-5 flex items-center border-b pb-3">
+                          <Icons.User className="w-5 h-5 mr-2 text-blue-500" /> Maklumat Diri
+                        </h4>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Nama (Auto) */}
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">Nama Penuh</label>
+                            <div className="flex items-center bg-slate-100 border border-slate-300 rounded-lg p-3 text-slate-500 cursor-not-allowed">
+                              <Icons.User className="w-5 h-5 mr-3 text-slate-400" />
+                              <span className="font-semibold text-sm">{user?.nama || "-"}</span>
+                            </div>
+                          </div>
+
+                          {/* Telefon (Auto) */}
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">No. Telefon</label>
+                            <div className="flex items-center bg-slate-100 border border-slate-300 rounded-lg p-3 text-slate-500 cursor-not-allowed">
+                              <Icons.Phone className="w-5 h-5 mr-3 text-slate-400" />
+                              <span className="font-semibold text-sm">{user?.noTelefon || "-"}</span>
+                            </div>
+                          </div>
+
+                          {/* INPUT TAMBAHAN: HANYA UNTUK PERMOHONAN BIASA */}
+                          {!isWaitingListMode && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                  No. Kad Pengenalan <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  name="noIc"
+                                  required
+                                  className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                  placeholder="880101-01-1234"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                  Pendapatan Bulanan (RM) <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  name="pendapatan"
+                                  type="number"
+                                  required
+                                  className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                  Pekerjaan / Jawatan <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  name="pekerjaan"
+                                  required
+                                  className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                  Alamat Tetap <span className="text-red-500">*</span>
+                                </label>
+                                <textarea
+                                  name="alamat"
+                                  required
+                                  rows="2"
+                                  className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                ></textarea>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* SEKSYEN B: MAKLUMAT SEWAAN (HANYA UNTUK PERMOHONAN BIASA) */}
+                      {!isWaitingListMode && (
+                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                          <h4 className="font-bold text-slate-800 text-lg mb-5 flex items-center border-b pb-3">
+                            <Icons.Calendar className="w-5 h-5 mr-2 text-blue-500" /> Butiran Sewaan
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-2">
+                                Tarikh Mula Sewaan <span className="text-red-500">*</span>
+                              </label>
+                              <input
+                                name="tarikhMula"
+                                type="date"
+                                required
+                                className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-bold text-slate-700 mb-1">Tempoh Sewaan</label>
+                              <input
+                                name="tempoh"
+                                required
+                                placeholder="Cth: 1 Tahun"
+                                className="w-full p-3 bg-white border border-slate-300 rounded-lg outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* SEKSYEN C: NOTA (COMMON TAPI LABEL BEZA) */}
+                      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                          {isWaitingListMode ? "Nota Tambahan (Pilihan)" : "Tujuan Sewaan / Catatan *"}
+                        </label>
+                        <textarea
+                          name="tujuan"
+                          required={!isWaitingListMode}
+                          rows="3"
+                          placeholder={isWaitingListMode ? "Sebarang pesanan untuk admin..." : "Tujuan sewaan..."}
+                          className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                        ></textarea>
+                      </div>
+
+                      {/* FOOTER ACTIONS */}
+                      <div className="pt-2 flex flex-col-reverse md:flex-row gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAsset(null);
+                            setView("listing");
+                          }}
+                          className="w-full md:w-1/3 py-4 border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-100 transition-colors"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          disabled={loadingAuth}
+                          type="submit"
+                          className={`w-full md:w-2/3 py-4 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all transform active:scale-[0.98] flex justify-center items-center ${
+                            isWaitingListMode ? "bg-orange-500 hover:bg-orange-600" : "bg-blue-600 hover:bg-blue-700"
+                          }`}
+                        >
+                          {loadingAuth ? (
+                            <>
+                              {" "}
+                              <Icons.Loader className="animate-spin h-5 w-5 mr-3" /> Memproses...{" "}
+                            </>
+                          ) : isWaitingListMode ? (
+                            <>
+                              {" "}
+                              Daftar Menunggu <Icons.UserPlus className="ml-2 h-5 w-5" />{" "}
+                            </>
+                          ) : (
+                            <>
+                              {" "}
+                              Hantar Permohonan <Icons.Send className="ml-2 h-5 w-5" />{" "}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showChangePassModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+                  <div className="flex justify-between items-center mb-6 border-b pb-4">
+                    <h3 className="text-xl font-bold">Tukar Kata Laluan</h3>
+                    <button onClick={() => setShowChangePassModal(false)} className="text-gray-400 hover:text-red-500">
+                      <Icons.X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (e.target.newPass.value !== e.target.confirmPass.value)
+                        return setToast({
+                          message: "Password tidak sepadan",
+                          type: "error",
+                        });
+                      setLoadingAuth(true);
+                      google.script.run
+                        .withSuccessHandler((res) => {
+                          setLoadingAuth(false);
+                          if (res.success) {
+                            setToast({ message: res.message, type: "success" });
+                            setShowChangePassModal(false);
+                          } else setToast({ message: res.message, type: "error" });
+                        })
+                        .changeUserPassword(user.email, e.target.oldPass.value, e.target.newPass.value);
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Password Lama</label>
+                      <input name="oldPass" type="password" required className="w-full p-3 border rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Password Baru</label>
+                      <input name="newPass" type="password" required className="w-full p-3 border rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Sahkan Password Baru</label>
+                      <input name="confirmPass" type="password" required className="w-full p-3 border rounded-lg" />
+                    </div>
+                    <div className="flex space-x-3 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowChangePassModal(false)}
+                        className="flex-1 py-3 border rounded-lg text-gray-600 hover:bg-slate-50"
+                      >
+                        Batal
+                      </button>
+                      <button type="submit" disabled={loadingAuth} className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
+                        {loadingAuth ? "Memproses..." : "Kemaskini"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- MODAL SAMBUNG SEWA --- */}
+            {renewalItem && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                  <div className="bg-teal-700 p-4 text-white flex justify-between items-center">
+                    <h3 className="font-bold flex items-center">
+                      <Icons.Refresh className="w-5 h-5 mr-2" /> Sambung Sewa
+                    </h3>
+                    <button onClick={() => setRenewalItem(null)}>
+                      <Icons.X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!confirm("Hantar permohonan pembaharuan ini?")) return;
+
+                      setLoadingAuth(true);
+                      const renewalData = {
+                        oldAppId: renewalItem.appId,
+                        newDuration: e.target.duration.value,
+                        newStartDate: e.target.startDate.value,
+                      };
+
+                      google.script.run
+                        .withSuccessHandler((res) => {
+                          setLoadingAuth(false);
+                          setRenewalItem(null); // Tutup modal
+                          if (res.success) {
+                            setToast({ message: res.message, type: "success" });
+                            fetchHistory(user.email); // Refresh list
+                            loadTaskCount(user.role); // Update badge jika perlu
+                          } else {
+                            alert(res.message);
+                          }
+                        })
+                        .submitRenewalApplication(renewalData);
+                    }}
+                    className="p-6 space-y-4"
+                  >
+                    <div className="bg-teal-50 p-3 rounded-lg border border-teal-100 mb-2">
+                      <p className="text-xs text-slate-500 uppercase font-bold">Aset</p>
+                      <p className="text-sm font-bold text-teal-800">{renewalItem.lokasi}</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Tarikh Mula Sambungan</label>
+                      <input name="startDate" type="date" required className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Tempoh Baru (Bulan/Tahun)</label>
+                      <input
+                        name="duration"
+                        type="text"
+                        placeholder="Cth: 1 Tahun"
+                        required
+                        className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
+                      />
+                    </div>
+
+                    <button disabled={loadingAuth} className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg shadow transition-all">
+                      {loadingAuth ? "Sedang Hantar..." : "Hantar Permohonan"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- MODAL LAPOR KEROSAKAN --- */}
+            {showReportModal && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+                  <div className="bg-red-600 p-4 text-white flex justify-between items-center">
+                    <h3 className="font-bold flex items-center">
+                      <Icons.AlertTriangle className="w-5 h-5 mr-2" /> Lapor Kerosakan
+                    </h3>
+                    <button onClick={() => setShowReportModal(false)}>
+                      <Icons.X className="w-6 h-6" />
+                    </button>
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!reportForm.asset) return alert("Sila pilih aset.");
+
+                      setLoadingAuth(true); // Guna loading state sedia ada
+
+                      // Cari detail aset dari history (lokasi dsb)
+                      const selectedAssetData = history.find((h) => h.appId === reportForm.asset);
+
+                      const data = {
+                        assetName: selectedAssetData ? selectedAssetData.nama : "Aset Lama", // Fallback
+                        location: selectedAssetData ? selectedAssetData.lokasi : "-",
+                        reporterName: user.nama,
+                        email: user.email,
+                        phone: user.noTelefon,
+                        issue: reportForm.issue,
+                      };
+
+                      google.script.run
+                        .withSuccessHandler((res) => {
+                          setLoadingAuth(false);
+                          setShowReportModal(false);
+                          if (res.success) {
+                            setToast({ message: res.message, type: "success" });
+                            fetchMaintenance(user.email); // Refresh list
+                          } else {
+                            alert(res.message);
+                          }
+                        })
+                        .submitMaintenanceReport(data);
+                    }}
+                    className="p-6 space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Pilih Aset Yang Rosak</label>
+                      <select
+                        className="w-full p-2.5 border rounded-lg bg-white focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                        required
+                        onChange={(e) => setReportForm({ ...reportForm, asset: e.target.value })}
+                      >
+                        <option value="">-- Sila Pilih --</option>
+                        {/* Hanya tunjuk aset yang status BERJAYA (Aktif) */}
+                        {history
+                          .filter((h) => h.status === "Berjaya")
+                          .map((h) => (
+                            <option key={h.appId} value={h.appId}>
+                              {h.nama} ({h.lokasi})
+                            </option>
+                          ))}
+                      </select>
+                      <p className="text-[10px] text-slate-500 mt-1">*Hanya aset yang sedang disewa dipaparkan.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Butiran Kerosakan</label>
+                      <textarea
+                        required
+                        rows="4"
+                        className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                        placeholder="Cth: Paip di bilik air utama bocor dan air melimpah..."
+                        onChange={(e) => setReportForm({ ...reportForm, issue: e.target.value })}
+                      ></textarea>
+                    </div>
+
+                    <button disabled={loadingAuth} className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow transition-all">
+                      {loadingAuth ? "Sedang Hantar..." : "Hantar Laporan"}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- MODAL E-AGREEMENT --- */}
+            {showSignModal && (
+              <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                  {/* Header */}
+                  <div className="bg-slate-800 p-4 text-white flex justify-between items-center rounded-t-2xl">
+                    <h3 className="font-bold flex items-center">
+                      <Icons.FileText className="w-5 h-5 mr-2" /> Perjanjian Sewaan
+                    </h3>
+                    <button onClick={() => setShowSignModal(false)}>
+                      <Icons.X className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  {/* Content - Scrollable */}
+                  <div className="p-6 overflow-y-auto flex-grow">
+                    <div className="prose prose-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded border border-slate-200 text-xs">
+                      <p className="font-bold mb-2">SYARAT DAN TERMA (RINGKASAN):</p>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>Penyewa hendaklah membayar sewa sebelum 7 haribulan setiap bulan.</li>
+                        <li>Sebarang kerosakan struktur adalah tanggungjawab penyewa.</li>
+                        <li>Dilarang melakukan aktiviti haram di dalam premis.</li>
+                        <li>Deposit tidak akan dikembalikan jika kontrak ditamatkan awal.</li>
+                      </ul>
+                      <p className="mt-2 text-center text-slate-400">--- (Dokumen penuh akan dijana selepas tandatangan) ---</p>
+                    </div>
+
+                    <div className="mb-2">
+                      <label className="block text-sm font-bold text-slate-800 mb-2">Tandatangan Digital Anda:</label>
+                      <SignaturePad
+                        onEnd={(canvas) => {
+                          // Tukar lukisan canvas ke DataURL (Gambar)
+                          setSignatureImg(canvas.toDataURL("image/png"));
+                        }}
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1 text-center">Sila tandatangan dalam kotak di atas menggunakan jari atau tetikus.</p>
+                    </div>
+                  </div>
+
+                  {/* Footer Actions */}
+                  <div className="p-4 border-t bg-slate-50 rounded-b-2xl flex justify-end space-x-2">
+                    <button onClick={() => setShowSignModal(false)} className="px-4 py-2 text-slate-600 font-bold text-sm hover:bg-slate-200 rounded-lg">
+                      Batal
+                    </button>
+                    <button
+                      onClick={handlePreview}
+                      type="button"
+                      disabled={loadingAuth}
+                      className="px-4 py-2 text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 font-bold text-sm rounded-lg flex items-center transition-colors"
+                    >
+                      {loadingAuth ? <Icons.Loader className="w-4 h-4 animate-spin"/> : <Icons.Eye className="w-4 h-4 mr-2" />}
+                      Lihat Draf
+                    </button>
+                    <button
+                      onClick={handleGeneratePDF}
+                      disabled={loadingAuth || !signatureImg}
+                      className={`px-6 py-2 text-white font-bold text-sm rounded-lg shadow-lg flex items-center ${
+                        loadingAuth || !signatureImg ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+                      }`}
+                    >
+                      {loadingAuth ? "Menjana PDF..." : "Sahkan & Hantar"} <Icons.Check className="w-4 h-4 ml-2" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- MODAL KALENDAR --- */}
+            {showCalendarAsset && <AvailabilityCalendar assetName={showCalendarAsset} onClose={() => setShowCalendarAsset(null)} />}
+          </main>
+          <Footer visitorCount={visitorCount} setView={setView} user={user} settings={sysSettings} />
+        </div>
+      </div>
+    );
+  };
+
+  const root = ReactDOM.createRoot(document.getElementById("root"));
+  root.render(<App />);
+</script>

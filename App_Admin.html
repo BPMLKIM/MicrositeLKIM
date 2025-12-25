@@ -1,0 +1,2233 @@
+<script type="text/babel">
+
+  // --- PENGURUSAN RALAT RECHARTS (IGNORE DEFAULT PROPS WARNING) ---
+  const originalConsoleError = console.error;
+  console.error = (...args) => {
+    if (/defaultProps/.test(args[0])) return;
+    originalConsoleError(...args);
+  };
+
+  const RechartsObj = window.Recharts || {};
+
+  const {
+    BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  } = RechartsObj;
+
+  // Warna Tema LKIM Moden
+  const COLORS = ['#1e3a8a', '#0f766e', '#f97316', '#8b5cf6', '#64748b'];
+
+  // ============================================================================
+  // 1. KOMPONEN CARTA (UI GLASS)
+  // ============================================================================
+  const DashboardCharts = ({ apps, stats }) => {
+    if (!BarChart || !PieChart) return null;
+    if (!apps || !stats) return null;
+
+    const pieData = [
+      { name: 'Lulus / Berjaya', value: stats.lulus },
+      { name: 'Dalam Proses', value: stats.dalamProses },
+      { name: 'Ditolak', value: stats.ditolak },
+    ].filter(d => d.value > 0);
+
+    const processMonthlyData = () => {
+      const monthlyCounts = {};
+      const months = ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"];
+      apps.forEach(app => {
+        try {
+          let dateParts = app.dateTime.split('/');
+          if (dateParts.length >= 2) {
+            let monthIndex = parseInt(dateParts[1]) - 1;
+            if (months[monthIndex]) {
+              monthlyCounts[months[monthIndex]] = (monthlyCounts[months[monthIndex]] || 0) + 1;
+            }
+          }
+        } catch (e) {}
+      });
+      return months.map(m => ({ name: m, Jumlah: monthlyCounts[m] || 0 }));
+    };
+
+    const barData = processMonthlyData();
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 animate-fade-in">
+        
+        {/* CARTA 1: BAR CHART (GLASS) */}
+        <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-blue-900/10 transition-all">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+          <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+            <div className="p-2 bg-blue-100/50 backdrop-blur-md rounded-xl mr-3 text-blue-700 shadow-sm border border-blue-200/30">
+               <Icons.BarChart2 className="w-5 h-5"/>
+            </div>
+            Trend Permohonan Bulanan
+          </h3>
+          <div className="h-64 w-full text-xs relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(203, 213, 225, 0.5)" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold'}} />
+                <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{fill: '#475569'}} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}
+                  cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
+                />
+                <Bar dataKey="Jumlah" fill="url(#colorBar)" radius={[6, 6, 0, 0]} barSize={24} />
+                <defs>
+                  <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.4}/>
+                  </linearGradient>
+                </defs>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* CARTA 2: PIE CHART (GLASS) */}
+        <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-orange-500/10 transition-all">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+          <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+            <div className="p-2 bg-orange-100/50 backdrop-blur-md rounded-xl mr-3 text-orange-600 shadow-sm border border-orange-200/30">
+               <Icons.PieChart className="w-5 h-5"/>
+            </div>
+            Pecahan Status
+          </h3>
+          <div className="h-64 w-full flex items-center justify-center text-xs relative z-10">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={85}
+                  paddingAngle={6}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.8)', backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }} />
+                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  // ============================================================================
+  // 2. MAIN COMPONENT (LOGIK ASAL + UI GLASS)
+  // ============================================================================
+  const AdminDashboard = ({ user, setToast, onUpdate }) => {
+
+    // --- STATE (KEKALKAN LOGIK ASAL) ---
+    const [tab, setTab] = useState("apps");
+    const [loading, setLoading] = useState(false);
+    const [uploading, setUploading] = useState(false); 
+    const [refresh, setRefresh] = useState(0); 
+    const [stats, setStats] = useState(null);
+    const [overdueCount, setOverdueCount] = useState(0);
+    const [settingsForm, setSettingsForm] = useState({ title: "", subtitle: "", logo: "", phone: "", email: "", address: "" });
+
+    // Data Lists
+    const [allApps, setAllApps] = useState([]);
+    const [allAssets, setAllAssets] = useState([]);
+    const [allBanners, setAllBanners] = useState([]);
+    const [allUsers, setAllUsers] = useState([]);
+    const [allWaiting, setAllWaiting] = useState([]);
+    const [allTickets, setAllTickets] = useState([]);
+    const [allLogs, setAllLogs] = useState([]); // State Audit Log
+
+    // UI Control
+    const [viewApp, setViewApp] = useState(null); 
+    const [editMode, setEditMode] = useState(false); 
+    const [editId, setEditId] = useState(null); 
+    const [selectedAdminApp, setSelectedAdminApp] = useState(null);
+    const [loadingAdmin, setLoadingAdmin] = useState(false);
+    const [assetSearch, setAssetSearch] = useState("");
+    const [showAssetForm, setShowAssetForm] = useState(false);
+    const [expandedCats, setExpandedCats] = useState({});
+    const toggleCat = (cat) => { setExpandedCats(prev => ({...prev, [cat]: !prev[cat]}));};
+
+    // State untuk Banner
+  const [showBannerForm, setShowBannerForm] = React.useState(false);
+  const [editingBanner, setEditingBanner] = React.useState(null);
+
+  // Auto buka form jika sedang edit
+  React.useEffect(() => {
+    if (editingBanner) setShowBannerForm(true);
+  }, [editingBanner]);
+
+  // Function wrapper untuk handle submit (Bezakan Add vs Edit)
+  const handleBannerSubmitWrapper = (e) => {
+    e.preventDefault();
+    
+    if(!bannerForm.title || !bannerForm.subtitle) {
+      alert("Sila isi tajuk dan subtajuk.");
+      return;
+    }
+
+    setUploading(true);
+
+    if (editingBanner) {
+        const fileInput = e.target.querySelector('input[name="imageFile"]');
+        const file = fileInput && fileInput.files[0];
+
+        if (file) {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = function() {
+                const payload = {
+                    rowIndex: editingBanner.rowIndex,
+                    title: bannerForm.title,
+                    subtitle: bannerForm.subtitle,
+                    expiry: bannerForm.expiry,
+                    url: bannerForm.url,
+                    image: editingBanner.image, // URL lama sebagai backup
+                    imageFile: {
+                        data: reader.result,
+                        name: file.name,
+                        type: file.type
+                    }
+                };
+                google.script.run.withSuccessHandler((res) => {
+                   setUploading(false);
+                   if(res.success) {
+                      alert(res.message);
+                      setEditingBanner(null);
+                      setShowBannerForm(false);
+                      fetchData(); // Refresh data
+                   } else {
+                      alert(res.message);
+                   }
+                }).updateBanner(payload);
+            };
+        } else {
+            const payload = {
+                rowIndex: editingBanner.rowIndex,
+                title: bannerForm.title,
+                subtitle: bannerForm.subtitle,
+                expiry: bannerForm.expiry,
+                url: bannerForm.url,
+                image: editingBanner.image // Kekalkan URL lama
+            };
+            
+            google.script.run.withSuccessHandler((res) => {
+               setUploading(false);
+               if(res.success) {
+                  alert(res.message);
+                  setEditingBanner(null);
+                  setShowBannerForm(false);
+                  fetchData();
+               } else {
+                  alert(res.message);
+               }
+            }).updateBanner(payload);
+        }
+    } else {
+        handleAddBanner(e);
+    }
+};
+
+    // State untuk Carian, Pagination dan Toggle Borang
+    const [searchTerm, setSearchTerm] = React.useState("");
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const [showForm, setShowForm] = React.useState(false); // Default tutup
+    const itemsPerPage = 10;
+
+    // Logic Pengiraan Data
+    const filteredUsers = allUsers.filter(u => 
+      (u.nama && u.nama.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (u.email && u.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (u.role && u.role.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentUsers = filteredUsers.slice(indexOfFirstItem, indexOfLastItem);
+
+    // Reset page ke 1 jika user buat carian baru
+    React.useEffect(() => {
+      setCurrentPage(1);
+    }, [searchTerm]);
+
+    // Auto buka form jika butang Edit ditekan
+    React.useEffect(() => {
+      if (editingUser) setShowForm(true);
+    }, [editingUser]);
+
+    // Forms
+    const [assetForm, setAssetForm] = useState({ nama: "", kategori: "Kuarters", kekosongan: "", status: "Aktif", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" });
+    const [userForm, setUserForm] = useState({ email: "", password: "", nama: "", noTelefon: "", syarikat: "", role: "user" });
+    const [bannerForm, setBannerForm] = useState({ title: "", subtitle: "", expiry: "", url: "" });
+    const [editingUser, setEditingUser] = useState(null); 
+    const [fileName, setFileName] = useState("");
+
+    const [reportData, setReportData] = useState([]);
+    const [loadingReport, setLoadingReport] = useState(false);
+    const [showReportTab, setShowReportTab] = useState(false);
+
+    const fetchReport = () => {
+      setLoadingReport(true);
+      google.script.run
+        .withSuccessHandler((data) => {
+          setReportData(data);
+          setLoadingReport(false);
+        })
+        .getAssetInventoryStats();
+    };
+
+    useEffect(() => {
+      if (tab === "reports") {
+         fetchReport();
+      }
+    }, [tab]);
+
+    // Notification Logic
+    const countUntukStaff = allApps.filter(a => a.status === "Dalam Proses").length;
+    const countUntukApprover = allApps.filter(a => a.status === "Disokong").length;
+    let notificationCount = 0;
+    if (user.role === 'staff') notificationCount = countUntukStaff;
+    else if (user.role === 'approver') notificationCount = countUntukApprover;
+    else if (user.role === 'admin') notificationCount = countUntukStaff + countUntukApprover;
+
+    const loadAdminData = () => {
+      setLoadingAdmin(true); 
+      google.script.run
+        .withSuccessHandler((data) => {
+          setAllApps(data.apps || []);
+          setAllAssets(data.assets || []);
+          setAllBanners(data.banners || []);
+          setAllUsers(data.users || []);
+          setAllWaiting(data.waiting || []); 
+          setAllLogs(data.logs || []);
+          
+          if (data.stats) setStats(data.stats);
+          google.script.run.withSuccessHandler(t => { 
+             setAllTickets(t || []); 
+             setLoadingAdmin(false);
+          }).getMaintenanceTickets(user.email, user.role);
+        })
+        .withFailureHandler((err) => {
+          setLoadingAdmin(false); 
+          alert("Gagal: " + err.message);
+        })
+        .getAdminData();
+    };
+
+    useEffect(() => {
+      fetchData();
+      const role = (user.role || "").toLowerCase();
+      if (role === "approver" || role === "staff") setTab("apps");
+    }, [refresh]);
+
+    const loadSettingsData = () => {
+      setLoading(true);
+      google.script.run.withSuccessHandler(data => {
+         setSettingsForm(data);
+         setLoading(false);
+      }).getSystemSettings();
+    };
+
+    useEffect(() => {
+       if (tab === "settings") {
+         loadSettingsData();
+       }
+    }, [tab]);
+
+    const fetchData = () => {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler((data) => {
+          setAllApps(data.apps || []);
+          setAllAssets(data.assets || []);
+          setAllBanners(data.banners || []);
+          setAllUsers(data.users || []);
+          setAllWaiting(data.waiting || []);
+          setAllLogs(data.logs || []);
+          if (data.stats) setStats(data.stats);
+          google.script.run.withSuccessHandler(t => { setAllTickets(t || []); setLoading(false); }).getMaintenanceTickets(user.email, user.role);
+          google.script.run.withSuccessHandler(c => setOverdueCount(c)).getOverdueStats();
+          setLoading(false);
+        })
+        .getAdminData();
+    };
+
+    const getDriveImageUrl = (id) => id && id.includes("http") ? id : `https://lh3.googleusercontent.com/d/${id}`;
+
+    // --- FUNCTION: ACTIONS (KEKALKAN LOGIK ASAL) ---
+    const handleProcessApp = (action, extraData = {}) => {
+      if (!confirm("Adakah anda pasti?")) return;
+      setLoading(true);
+      google.script.run.withSuccessHandler((res) => {
+          setLoading(false);
+          setToast({ message: res.message, type: res.success ? "success" : "error" });
+          if (res.success) { setSelectedAdminApp(null); setRefresh(p => p + 1); if (onUpdate) onUpdate(); }
+        }).processApplication({ action, rowIndex: selectedAdminApp.rowIndex, ...extraData });
+    };
+
+    const handleSaveAsset = (e) => {
+      e.preventDefault();
+      setLoading(true);
+      const handler = (res) => {
+        setLoading(false);
+        setToast({ message: res.message, type: res.success ? "success" : "error" });
+        if (res.success) {
+          setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" });
+          setEditMode(false); setEditId(null); setRefresh(p => p + 1);
+        }
+      };
+      if (editMode) google.script.run.withSuccessHandler(handler).updateAsset({ ...assetForm, id: editId });
+      else google.script.run.withSuccessHandler(handler).addAsset(assetForm);
+    };
+
+    const handleEditAssetClick = (asset) => {
+      setEditMode(true); setEditId(asset.id);
+      setAssetForm({ nama: asset.nama, kategori: asset.kategori, kekosongan: asset.rawKekosongan, status: asset.status, lokasi: asset.lokasi, deskripsi: asset.deskripsi, saiz: asset.saiz, info: asset.info, harga: asset.harga || "" });
+    };
+
+    const handleDeleteItem = (type, index) => {
+      if (!confirm("Padam item ini?")) return;
+      google.script.run.withSuccessHandler(() => { setRefresh(p => p + 1); if (onUpdate) onUpdate(); }).deleteItem(type, index);
+    };
+
+    const handleAddBanner = (e) => {
+      e.preventDefault();
+      const fileInput = e.target.querySelector('input[name="imageFile"]');
+      const file = fileInput ? fileInput.files[0] : null;
+      const submitBanner = (fileData = null) => {
+        setUploading(true);
+        google.script.run.withSuccessHandler((res) => {
+            setUploading(false);
+            setToast({ message: res.message, type: res.success ? "success" : "error" });
+            if (res.success) { setBannerForm({ title: "", subtitle: "", expiry: "", url: "" }); setFileName(""); e.target.reset(); setRefresh(p => p + 1); }
+          }).addBanner({ ...bannerForm, imageFile: fileData });
+      };
+      if (file) { const reader = new FileReader(); reader.onloadend = () => submitBanner({ name: file.name, type: file.type, data: reader.result }); reader.readAsDataURL(file); } else submitBanner(null);
+    };
+
+    const handleUserSubmit = (e) => {
+      e.preventDefault();
+      setLoading(true);
+      const handler = (res) => {
+        setLoading(false);
+        setToast({ message: res.message, type: res.success ? "success" : "error" });
+        if (res.success) { setEditingUser(null); setUserForm({ email: "", password: "", nama: "", noTelefon: "", syarikat: "", role: "user" }); setRefresh(p => p + 1); }
+      };
+      if (editingUser) google.script.run.withSuccessHandler(handler).adminUpdateUser(userForm);
+      else google.script.run.withSuccessHandler(handler).adminAddUser(userForm);
+    };
+
+    const handleSaveSettings = (e) => {
+      e.preventDefault();
+      setLoading(true);
+      
+      const fileInput = e.target.querySelector('input[name="logoFile"]');
+      const file = fileInput && fileInput.files[0];
+
+      const submit = (fileData = null) => {
+         const payload = { ...settingsForm, logoFile: fileData, currentLogo: settingsForm.logo };
+         google.script.run.withSuccessHandler(res => {
+            setLoading(false);
+            setToast({ message: res.message, type: res.success ? "success" : "error" });
+            if(res.success) {
+               loadSettingsData(); // Refresh form
+               if(onUpdate) onUpdate(); // Refresh main app supaya logo bertukar terus
+            }
+         }).saveSystemSettings(payload);
+      };
+
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => submit({ name: file.name, type: file.type, data: reader.result });
+        reader.readAsDataURL(file);
+      } else {
+        submit(null);
+      }
+    };
+
+    // ============================================================================
+    // 3. RENDER UI
+    // ============================================================================
+    return (
+      <>
+        {/* BACKGROUND MESH (Blob Biru & Oren) */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+            <div className="absolute top-[-10%] left-[-5%] w-[50%] h-[50%] rounded-full bg-blue-200/40 blur-[120px] animate-pulse-slow"></div>
+            <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-orange-200/30 blur-[100px] animate-pulse-slow" style={{animationDelay: '2s'}}></div>
+        </div>
+
+        <div className="animate-fade-in relative z-10 pb-20">
+          
+          {/* HEADER DASHBOARD (GLASS) */}
+          <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl p-6 rounded-[2rem] mb-8 flex justify-between items-center relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-orange-500/5 group-hover:opacity-50 transition-opacity"></div>
+            
+            <h2 className="text-2xl font-extrabold text-slate-800 flex items-center relative z-10">
+              <div className="p-2.5 bg-gradient-to-br from-blue-900 to-blue-700 rounded-xl mr-4 shadow-lg shadow-blue-900/20 text-white ring-1 ring-white/20">
+                  <Icons.Settings className="w-6 h-6" />
+              </div>
+              <span>
+                  Papan Pemuka <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-800 to-orange-600">{String(user.role).toUpperCase()}</span>
+              </span>
+            </h2>
+            
+            <button
+              onClick={loadAdminData}
+              disabled={loadingAdmin}
+              // PENTING: Kekalkan 'relative z-10' ini supaya butang boleh ditekan
+              className={`relative z-10 flex items-center text-sm font-bold px-5 py-2.5 rounded-full transition-all shadow-sm border border-white/60 ${
+                loadingAdmin
+                  ? "bg-slate-100/50 text-slate-400 cursor-not-allowed"
+                  : "bg-white/60 text-blue-700 hover:bg-white hover:shadow-md hover:scale-105"
+              }`}
+            >
+              {loadingAdmin ? (
+                <>
+                  {/* Icon Loader Asal */}
+                  <Icons.Loader className="w-4 h-4 mr-2 animate-spin"/> 
+                  Memuat semula...
+                </>
+              ) : (
+                <>
+                  {/* Icon Refresh Asal */}
+                  <Icons.Refresh className="w-4 h-4 mr-2"/> 
+                  Muat Semula
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* ALERT TERTUNGGAK (GLASS) */}
+          {["admin", "staff"].includes(user.role) && overdueCount > 0 && (
+            <div className="mb-8 bg-red-50/80 backdrop-blur-md border border-red-200 p-5 rounded-[2rem] shadow-lg flex items-start animate-pulse-slow relative overflow-hidden">
+               <div className="p-2 bg-red-100/50 rounded-full mr-4 text-red-600 shadow-sm border border-red-200/50">
+                  <Icons.AlertTriangle className="w-6 h-6" />
+               </div>
+               <div className="flex-grow">
+                  <h3 className="text-red-900 font-bold text-lg">Perhatian: Tindakan Segera</h3>
+                  <p className="text-red-700 text-sm mt-1 leading-relaxed">
+                     Terdapat <strong className="text-lg underline decoration-red-400">{overdueCount}</strong> permohonan tertunggak melebihi 3 hari. 
+                  </p>
+               </div>
+               <button onClick={() => setTab("apps")} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-full text-xs shadow-lg shadow-red-500/30 transition-transform hover:scale-105">
+                 Lihat Senarai
+               </button>
+            </div>
+          )}
+
+          {/* TAB MENU (GLASS CAPSULES) */}
+          <div className="flex justify-center mb-8">
+              <div className="flex space-x-1 bg-white/40 p-1.5 rounded-full border border-white/50 backdrop-blur-xl shadow-lg overflow-x-auto max-w-full ring-1 ring-white/40">
+                {(() => {
+                  const role = (user.role || "").toLowerCase();
+                  let tabs = [];
+                  if (role === "admin") tabs = ["apps", "waiting", "maintenance", "assets", "reports", "banners", "users", "settings", "logs"];
+                  else if (role === "staff") tabs = ["apps"];
+                  else if (role === "approver") tabs = ["apps"];
+
+                  return tabs.map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setTab(t)}
+                      className={`relative px-5 py-2.5 rounded-full font-bold text-sm transition-all whitespace-nowrap flex items-center ${
+                        tab === t 
+                          ? "bg-white text-blue-900 shadow-lg ring-1 ring-white transform scale-105 z-10 backdrop-blur-md" 
+                          : "text-slate-600 hover:text-orange-600 hover:bg-white/40"
+                      }`}
+                    >
+                      {t === "apps" && <Icons.FileText className="w-4 h-4 mr-2" />}
+                      {t === "assets" && <Icons.Building className="w-4 h-4 mr-2" />}
+                      {t === "reports" && <Icons.PieChart className="w-4 h-4 mr-2" />}
+                      {t === "banners" && <Icons.Image className="w-4 h-4 mr-2" />}
+                      {t === "users" && <Icons.User className="w-4 h-4 mr-2" />}
+                      {t === "waiting" && <Icons.Clock className="w-4 h-4 mr-2" />}
+                      {t === "maintenance" && <Icons.Tool className="w-4 h-4 mr-2" />}
+                      {t === "settings" && <Icons.Settings className="w-4 h-4 mr-2" />}
+                      {t === "logs" && <Icons.Shield className="w-4 h-4 mr-2" />}
+
+                      {t === "maintenance" ? "Aduan" : t === "waiting" ? "Menunggu" : t === "apps" ? "Permohonan" : t === "assets" ? "Aset" : t === "reports" ? "Laporan" : t === "banners" ? "Banner" : t === "users" ? "Pengguna" : t === "settings" ? "Tetapan Sistem" : "Logs"}
+
+                      {t === "apps" && notificationCount > 0 && (
+                        <span className="ml-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-pulse">
+                          {notificationCount}
+                        </span>
+                      )}
+                    </button>
+                  ));
+                })()}
+              </div>
+          </div>
+
+          {/* --- MAIN CONTENT CONTAINER (GLASS BOX) --- */}
+          <div className="bg-white/60 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl border border-white/60 p-6 min-h-[500px] relative overflow-hidden">
+            
+            {/* Blob Hiasan Dalam Container */}
+            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-400/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+            {/* --- TAB 1: LOGS (AUDIT TRAIL) --- */}
+            {tab === "logs" && (
+              <div className="animate-fade-in space-y-6 relative z-10">
+                
+                {/* HEADER */}
+                <div className="flex items-center bg-slate-50/60 backdrop-blur-md p-5 rounded-3xl border border-slate-200/50 shadow-sm">
+                   <div className="p-3 bg-slate-200 rounded-2xl mr-4 text-slate-700 shadow-sm border border-slate-300">
+                      <Icons.Shield className="w-8 h-8"/>
+                   </div>
+                   <div>
+                      <h3 className="font-bold text-2xl text-slate-800 tracking-tight">Jejak Audit Sistem</h3>
+                      <p className="text-sm text-slate-500 font-medium">Rekod aktiviti log masuk dan perubahan data.</p>
+                   </div>
+                </div>
+
+                {/* JADUAL LOG (TERMINAL STYLE) */}
+                <div className="bg-slate-900/90 backdrop-blur-xl rounded-[2rem] border border-slate-700/50 overflow-hidden shadow-2xl text-slate-300 font-mono text-xs">
+                  {/* Header Terminal */}
+                  <div className="bg-slate-800/80 px-6 py-3 border-b border-slate-700 flex items-center justify-between">
+                      <div className="flex space-x-2">
+                          <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                          <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                          <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      </div>
+                      <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500">System_Logs.db</div>
+                  </div>
+
+                  <div className="max-h-[600px] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-800/50 text-slate-400 font-bold uppercase sticky top-0 backdrop-blur-md">
+                        <tr>
+                          <th className="p-5 w-48 border-b border-slate-700">Timestamp</th>
+                          <th className="p-5 w-56 border-b border-slate-700">User ID</th>
+                          <th className="p-5 w-40 border-b border-slate-700">Action</th>
+                          <th className="p-5 border-b border-slate-700">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-700/50">
+                        {loadingAdmin ? (
+                          <tr>
+                            <td colSpan="4" className="p-12 text-center">
+                              <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse">
+                                <Icons.Loader className="w-8 h-8 animate-spin mb-3 text-blue-500"/>
+                                <span className="text-sm font-mono">Fetching System Logs...</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : allLogs.length === 0 ? (
+                          <tr><td colSpan="4" className="p-12 text-center text-slate-500 italic">No logs available.</td></tr>
+                        ) : (
+                          allLogs.map((log, i) => (
+                            <tr key={i} className="hover:bg-slate-800/50 transition-colors">
+                              <td className="p-5 text-slate-500 whitespace-nowrap border-r border-slate-700/30">
+                                  <span className="text-green-500 mr-2">$</span>
+                                  {log.timestamp}
+                              </td>
+                              <td className="p-5 border-r border-slate-700/30">
+                                  <div className="text-blue-400 font-bold">{log.email}</div>
+                                  <span className="text-[10px] text-slate-500 uppercase">{log.role}</span>
+                              </td>
+                              <td className="p-5 border-r border-slate-700/30">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${
+                                      log.action === 'LOGIN' ? 'bg-green-900/30 text-green-400 border-green-800' :
+                                      log.action.includes('DELETE') ? 'bg-red-900/30 text-red-400 border-red-800' :
+                                      'bg-blue-900/30 text-blue-400 border-blue-800'
+                                  }`}>{log.action}</span>
+                              </td>
+                              <td className="p-5 text-slate-400 truncate max-w-xs" title={log.details}>
+                                  {log.details}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="p-3 bg-slate-800/50 text-center text-[10px] text-slate-600 border-t border-slate-700">
+                      -- End of Log Stream --
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB: WAITING LIST (DIPERKEMASKAN) --- */}
+            {tab === "waiting" && (
+              <div className="animate-fade-in space-y-6 relative z-10">
+                
+                {/* HEADER: RINGKASAN DATA */}
+                <div className="flex flex-col md:flex-row justify-between items-center bg-orange-50/50 backdrop-blur-md p-4 rounded-2xl border border-orange-100/50 shadow-sm">
+                  <div className="flex items-center mb-4 md:mb-0">
+                     <div className="p-3 bg-orange-100 rounded-xl mr-4 text-orange-600 shadow-sm">
+                        <Icons.Clock className="w-6 h-6" />
+                     </div>
+                     <div>
+                        <h3 className="font-bold text-xl text-slate-800">Senarai Menunggu</h3>
+                        <p className="text-xs text-slate-500">Pemohon yang berminat apabila aset penuh.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3">
+                     <div className="bg-white/60 px-4 py-2 rounded-xl text-center border border-white/50 shadow-sm">
+                        <span className="block text-[10px] font-bold uppercase text-slate-400">Jumlah</span>
+                        <span className="font-extrabold text-lg text-slate-800">{allWaiting.length}</span>
+                     </div>
+                     <div className="bg-white/60 px-4 py-2 rounded-xl text-center border border-white/50 shadow-sm">
+                        <span className="block text-[10px] font-bold uppercase text-slate-400">Paling Lama</span>
+                        <span className="font-extrabold text-lg text-orange-600">
+                          {allWaiting.length > 0 ? (() => {
+                            const today = new Date().getTime();
+                            
+                            // 1. Dapatkan senarai tempoh hari untuk setiap orang
+                            const durations = allWaiting.map(w => {
+                                if (!w.date) return 0;
+                                
+                                let dateObj;
+                                // TEKNIK: Handle format Malaysia (DD/MM/YYYY)
+                                if (w.date.includes('/')) {
+                                    const parts = w.date.split('/'); // Pecah [31, 12, 2024]
+                                    if(parts.length === 3) {
+                                        // new Date(Year, MonthIndex, Day) -> MonthIndex mula 0 (Jan=0)
+                                        dateObj = new Date(parts[2], parts[1] - 1, parts[0]); 
+                                    } else {
+                                        return 0;
+                                    }
+                                } else {
+                                    // Kalau format standard (YYYY-MM-DD)
+                                    dateObj = new Date(w.date);
+                                }
+
+                                // Kalau tarikh rosak (Invalid), return 0
+                                if (isNaN(dateObj.getTime())) return 0;
+
+                                // Kira beza hari
+                                const diff = today - dateObj.getTime();
+                                return Math.floor(diff / (1000 * 60 * 60 * 24));
+                            });
+
+                            // 2. Cari nombor paling besar dalam senarai tempoh tadi
+                            const longestWait = Math.max(...durations);
+                            
+                            return longestWait + " Hari";
+                          })() : "0 Hari"}
+                        </span>
+                     </div>
+                  </div>
+                </div>
+
+                {/* TABEL SENARAI MENUNGGU (RICH UI) */}
+                <div className="bg-white/40 rounded-[2rem] border border-white/50 overflow-hidden shadow-inner backdrop-blur-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-orange-50/50 text-xs font-bold text-slate-600 uppercase backdrop-blur-md border-b border-orange-100/30">
+                        <tr>
+                          <th className="px-6 py-4">Profil Pemohon</th>
+                          <th className="px-6 py-4">Aset Diminta</th>
+                          <th className="px-6 py-4">Tempoh Menunggu</th>
+                          <th className="px-6 py-4">Nota / Sebab</th>
+                          <th className="px-6 py-4 text-center">Tindakan Pantas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200/30">
+                        {loadingAdmin ? (
+                        <tr>
+                          <td colSpan="5" className="p-12 text-center">
+                              <div className="flex flex-col items-center justify-center text-slate-500">
+                                <Icons.Loader className="w-8 h-8 animate-spin mb-3 text-orange-500"/>
+                                <span className="text-sm font-bold">Menyemak Senarai Menunggu...</span>
+                              </div>
+                          </td>
+                        </tr>
+                    ) : allWaiting.length === 0 ? (
+                          <tr><td colSpan="5" className="p-12 text-center text-slate-500 italic">Tiada sesiapa dalam senarai menunggu.</td></tr>
+                        ) : (
+                          allWaiting.map((w, i) => {
+                              // Kira berapa hari menunggu
+                              // --- MULA LOGIK TEMPOH MENUNGGU ---
+                              
+                              // 1. Dapatkan tarikh hari ini
+                              const today = new Date();
+                              
+                              // 2. Dapatkan tarikh permohonan (w.date)
+                              // Pastikan w.date wujud, kalau tak ada guna tarikh hari ini
+                              const applyDate = w.date ? new Date(w.date) : new Date();
+                              
+                              // 3. Kira perbezaan masa (milisaat)
+                              const diffTime = Math.abs(today - applyDate);
+                              
+                              // 4. Tukar milisaat kepada Hari
+                              // Formula: 1000ms * 60s * 60m * 24h
+                              let daysWait = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                              // (Pilihan) Jika NaN atau Error, letak 0
+                              if (isNaN(daysWait)) daysWait = 0;
+                              const phoneClean = w.phone ? w.phone.replace(/\D/g,'') : '';
+                              const isStaff = w.email.includes("lkim.gov.my"); // Contoh logik staff
+
+                              return (
+                              <tr key={i} className="hover:bg-white/50 transition-colors group">
+                                {/* 1. Profil */}
+                                <td className="px-6 py-4 align-top">
+                                    <div className="flex items-start">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white mr-3 shadow-sm ${isStaff ? 'bg-blue-600' : 'bg-slate-400'}`}>
+                                         {w.name.charAt(0).toUpperCase()}
+                                      </div>
+                                      <div>
+                                         <div className="font-bold text-sm text-slate-800">{w.name}</div>
+                                         <div className="text-xs text-slate-500">{w.email}</div>
+                                      </div>
+                                    </div>
+                                </td>
+
+                                {/* 2. Aset */}
+                                <td className="px-6 py-4 align-top">
+                                    <div className="font-bold text-slate-700 text-sm flex items-center">
+                                      <Icons.Building className="w-3 h-3 mr-1.5 text-orange-500"/>
+                                      {w.asset}
+                                    </div>
+                                    <div className="text-[10px] bg-slate-100/50 border border-slate-200/50 w-fit px-2 py-0.5 rounded text-slate-500 mt-1">
+                                      Mohon pada: {w.date}
+                                    </div>
+                                </td>
+
+                                {/* 3. Tempoh (Highlight Merah kalau lama) */}
+                                <td className="px-6 py-4 align-top">
+                                    <div className={`font-mono font-bold text-sm ${daysWait > 30 ? "text-red-600" : "text-green-600"}`}>
+                                       {daysWait} Hari
+                                    </div>
+                                    <div className="w-full bg-slate-200 h-1.5 rounded-full mt-2 overflow-hidden">
+                                       <div 
+                                          className={`h-full rounded-full ${daysWait > 30 ? "bg-red-500" : "bg-green-500"}`} 
+                                          style={{width: `${Math.min(daysWait, 100)}%`}}
+                                       ></div>
+                                    </div>
+                                </td>
+
+                                {/* 4. Nota */}
+                                <td className="px-6 py-4 align-top">
+                                    {w.note ? (
+                                      <div className="text-xs italic text-slate-600 bg-yellow-50/50 p-2 rounded border border-yellow-100/50 max-w-[200px]">
+                                         "{w.note}"
+                                      </div>
+                                    ) : <span className="text-slate-400 text-xs">-</span>}
+                                </td>
+
+                                {/* 5. Tindakan (WhatsApp & Delete) */}
+                                <td className="px-6 py-4 text-center align-middle">
+                                    <div className="flex justify-center space-x-2">
+                                       {/* Butang WhatsApp */}
+                                       <a 
+                                         href={`https://wa.me/60${phoneClean.startsWith('60') ? phoneClean.substring(2) : phoneClean.startsWith('0') ? phoneClean.substring(1) : phoneClean}?text=Salam ${w.name}, mengenai permohonan menunggu aset ${w.asset}...`}
+                                         target="_blank"
+                                         className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-xl shadow-sm transition-transform hover:scale-110"
+                                         title="WhatsApp Pemohon"
+                                       >
+                                          <Icons.MessageCircle className="w-4 h-4"/>
+                                       </a>
+                                       
+                                       {/* Butang Emel */}
+                                       <a 
+                                         href={`mailto:${w.email}?subject=Makluman Kekosongan Aset ${w.asset}`}
+                                         className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-xl shadow-sm transition-transform hover:scale-110"
+                                         title="Emel Pemohon"
+                                       >
+                                          <Icons.Mail className="w-4 h-4"/>
+                                       </a>
+
+                                       {/* Butang Padam */}
+                                       <button 
+                                         onClick={() => handleDeleteItem('waiting', w.rowIndex)} 
+                                         className="bg-white border border-red-100 text-red-500 hover:bg-red-50 p-2 rounded-xl shadow-sm transition-transform hover:scale-110"
+                                         title="Padam dari senarai"
+                                       >
+                                          <Icons.Trash className="w-4 h-4"/>
+                                       </button>
+                                    </div>
+                                </td>
+                              </tr>
+                          )})
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB 3: MAINTENANCE --- */}
+            {tab === "maintenance" && (
+              <div className="animate-fade-in space-y-6 relative z-10">
+                
+                {/* HEADER STATISTIK ADUAN */}
+                <div className="flex flex-col md:flex-row justify-between items-center bg-red-50/50 backdrop-blur-md p-4 rounded-2xl border border-red-100/50 shadow-sm">
+                  <div className="flex items-center mb-4 md:mb-0">
+                     <div className="p-3 bg-red-100 rounded-xl mr-4 text-red-600 shadow-sm">
+                        <Icons.Tool className="w-6 h-6" />
+                     </div>
+                     <div>
+                        <h3 className="font-bold text-xl text-slate-800">Aduan & Penyelenggaraan</h3>
+                        <p className="text-xs text-slate-500">Urus tiket kerosakan aset di sini.</p>
+                     </div>
+                  </div>
+                  <div className="flex gap-3">
+                     <div className="bg-white/60 px-4 py-2 rounded-xl text-center border border-white/50 shadow-sm">
+                        <span className="block text-[10px] font-bold uppercase text-slate-400">Belum Selesai</span>
+                        <span className="font-extrabold text-lg text-red-600">
+                          {allTickets.filter(t => t.status !== 'Selesai').length}
+                        </span>
+                     </div>
+                     <div className="bg-white/60 px-4 py-2 rounded-xl text-center border border-white/50 shadow-sm">
+                        <span className="block text-[10px] font-bold uppercase text-slate-400">Diselesaikan</span>
+                        <span className="font-extrabold text-lg text-green-600">
+                          {allTickets.filter(t => t.status === 'Selesai').length}
+                        </span>
+                     </div>
+                  </div>
+                </div>
+
+                {/* JADUAL TIKET (RICH UI) */}
+                <div className="bg-white/40 rounded-[2rem] border border-white/50 overflow-hidden shadow-inner backdrop-blur-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-red-50/50 text-xs font-bold text-slate-600 uppercase backdrop-blur-md border-b border-red-100/30">
+                        <tr>
+                          <th className="px-6 py-4">ID / Tarikh</th>
+                          <th className="px-6 py-4">Kerosakan & Aset</th>
+                          <th className="px-6 py-4">Pengadu</th>
+                          <th className="px-6 py-4 text-center">Status Pembaikan</th>
+                          <th className="px-6 py-4 text-center">Hubungi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200/30">
+                        {loadingAdmin ? (
+                        <tr>
+                          <td colSpan="5" className="p-12 text-center">
+                              <div className="flex flex-col items-center justify-center text-slate-500">
+                                <Icons.Loader className="w-8 h-8 animate-spin mb-3 text-red-500"/>
+                                <span className="text-sm font-bold">Mengemaskini Tiket Aduan...</span>
+                              </div>
+                          </td>
+                        </tr>
+                    ) : allTickets.length === 0 ? (
+                           <tr><td colSpan="5" className="p-12 text-center text-slate-500 italic">Tiada aduan kerosakan direkodkan.</td></tr>
+                        ) : (
+                           allTickets.map((t, i) => {
+                              const phoneClean = t.phone ? t.phone.replace(/\D/g,'') : '';
+                              
+                              return (
+                                <tr key={i} className="hover:bg-white/50 transition-colors group">
+                                  
+                                  {/* 1. ID & Tarikh */}
+                                  <td className="px-6 py-4 align-top w-32">
+                                      <div className="font-mono text-xs font-bold text-red-600 bg-red-100/50 px-2 py-1 rounded border border-red-200/50 w-fit backdrop-blur-sm">
+                                         #{t.id}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 mt-2 font-bold uppercase tracking-wider">
+                                         {t.date}
+                                      </div>
+                                  </td>
+
+                                  {/* 2. Isu, Gambar & Aset */}
+                                  <td className="px-6 py-4 align-top">
+                                      <div className="flex gap-3">
+                                         {/* Thumbnail Gambar (Jika ada) */}
+                                         <div className="h-12 w-12 rounded-lg bg-slate-200 flex-shrink-0 overflow-hidden border border-white shadow-sm">
+                                            {t.image ? (
+                                              <a href={t.image} target="_blank" title="Lihat Gambar Penuh">
+                                                <img src={t.image} className="h-full w-full object-cover hover:scale-110 transition-transform cursor-zoom-in" alt="Bukti"/>
+                                              </a>
+                                            ) : (
+                                              <div className="h-full w-full flex items-center justify-center text-slate-400">
+                                                <Icons.Image className="w-5 h-5"/>
+                                              </div>
+                                            )}
+                                         </div>
+                                         
+                                         <div>
+                                            <div className="font-bold text-slate-800 text-sm leading-tight mb-1">{t.issue}</div>
+                                            <div className="text-xs text-slate-500 flex items-center bg-white/40 px-2 py-0.5 rounded w-fit border border-white/50">
+                                               <Icons.Home className="w-3 h-3 mr-1.5 text-blue-500"/>
+                                               {t.asset}
+                                            </div>
+                                         </div>
+                                      </div>
+                                  </td>
+
+                                  {/* 3. Info Pengadu */}
+                                  <td className="px-6 py-4 align-top">
+                                      <div className="font-bold text-sm text-slate-700">{t.reporter}</div>
+                                      <div className="text-xs text-slate-500">{t.email}</div>
+                                      <div className="text-xs text-slate-400 mt-0.5">{t.phone}</div>
+                                  </td>
+
+                                  {/* 4. Status Dropdown (Glass) */}
+                                  <td className="px-6 py-4 align-top text-center">
+                                      <div className="relative inline-block w-40">
+                                          <select 
+                                            className={`w-full text-xs font-bold border rounded-lg px-3 py-2 outline-none cursor-pointer appearance-none shadow-sm backdrop-blur-sm transition-all ${
+                                              t.status === 'Baru' ? 'bg-red-100/60 text-red-700 border-red-200' :
+                                              t.status === 'Sedang Dibaiki' ? 'bg-yellow-100/60 text-yellow-700 border-yellow-200' :
+                                              'bg-green-100/60 text-green-700 border-green-200'
+                                            }`}
+                                            value={t.status}
+                                            onChange={(e) => {
+                                                const newVal = e.target.value;
+                                                // Prompt nota admin
+                                                const note = prompt(`Kemaskini status #${t.id} kepada '${newVal}'. Masukkan nota (pilihan):`, t.adminNote === '-' ? '' : t.adminNote);
+                                                if (note !== null) {
+                                                  setLoading(true);
+                                                  google.script.run.withSuccessHandler(() => { setLoading(false); fetchData(); }).updateTicketStatus(t.rowIndex, newVal, note || "-");
+                                                }
+                                            }}
+                                          >
+                                            <option value="Baru">🔴 Baru</option>
+                                            <option value="Sedang Dibaiki">🟡 Sedang Dibaiki</option>
+                                            <option value="Selesai">🟢 Selesai</option>
+                                          </select>
+                                          <div className="absolute right-2 top-2.5 pointer-events-none opacity-50"><Icons.ChevronDown className="w-3 h-3"/></div>
+                                      </div>
+                                      
+                                      {/* Nota Admin (Jika ada) */}
+                                      {t.adminNote && t.adminNote !== "-" && (
+                                         <div className="mt-2 text-[10px] text-slate-600 bg-white/50 p-1.5 rounded border border-white/60 italic text-left mx-auto w-40">
+                                            "Nota: {t.adminNote}"
+                                         </div>
+                                      )}
+                                  </td>
+
+                                  {/* 5. Hubungi */}
+                                  <td className="px-6 py-4 align-top text-center">
+                                     <div className="flex justify-center space-x-2">
+                                        <a 
+                                          href={`https://wa.me/60${phoneClean.startsWith('60') ? phoneClean.substring(2) : phoneClean.startsWith('0') ? phoneClean.substring(1) : phoneClean}?text=Salam ${t.reporter}, mengenai aduan kerosakan #${t.id} (${t.issue})...`}
+                                          target="_blank"
+                                          className="bg-green-500 hover:bg-green-600 text-white p-2 rounded-xl shadow-sm transition-transform hover:scale-110"
+                                          title="WhatsApp Pengadu"
+                                        >
+                                           <Icons.Phone className="w-4 h-4"/>
+                                        </a>
+                                        <a 
+                                          href={`mailto:${t.email}?subject=Status Aduan Kerosakan #${t.id}`}
+                                          className="bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-xl shadow-sm transition-transform hover:scale-110"
+                                          title="Emel Pengadu"
+                                        >
+                                           <Icons.Mail className="w-4 h-4"/>
+                                        </a>
+                                     </div>
+                                  </td>
+                                </tr>
+                           )})
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB 4: APPS (PERMOHONAN) --- */}
+            {tab === "apps" && (
+              <div className="animate-fade-in space-y-6 relative z-10">
+                
+                {/* 1. HEADER & STATISTIK RINGKAS */}
+                <div className="flex flex-col md:flex-row justify-between items-center bg-blue-50/50 backdrop-blur-md p-5 rounded-[2rem] border border-blue-100/50 shadow-sm">
+                   <div className="flex items-center mb-4 md:mb-0">
+                      <div className="p-3 bg-blue-100 rounded-2xl mr-4 text-blue-700 shadow-sm border border-blue-200">
+                         <Icons.FileText className="w-8 h-8"/>
+                      </div>
+                      <div>
+                         <h3 className="font-bold text-2xl text-slate-800 tracking-tight">Senarai Permohonan</h3>
+                         <p className="text-sm text-slate-500 font-medium">Pantau kelulusan dan status sewaan.</p>
+                      </div>
+                   </div>
+                   
+                   {/* Notification Badge Besar */}
+                   {notificationCount > 0 && (
+                      <div className="flex items-center bg-orange-500 text-white px-5 py-3 rounded-xl shadow-lg shadow-orange-500/30 animate-pulse">
+                         <Icons.Bell className="w-5 h-5 mr-3"/>
+                         <div>
+                            <span className="block text-[10px] font-bold uppercase opacity-80">Tindakan Diperlukan</span>
+                            <span className="font-bold text-lg">{notificationCount} Permohonan Baru</span>
+                         </div>
+                      </div>
+                   )}
+                </div>
+
+                {/* STATISTIK CARDS (GLASS) */}
+                {["admin", "approver", "staff"].includes(user.role) && stats && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    {[
+                        { label: "Jumlah Permohonan", val: stats.total, icon: Icons.FileText, color: "blue" },
+                        { label: "Dalam Proses", val: stats.dalamProses, icon: Icons.Loader, color: "yellow" },
+                        { label: "Lulus / Berjaya", val: stats.lulus, icon: Icons.CheckCircle, color: "green" },
+                        { label: "Anggaran Hasil", val: `RM ${stats.kutipan.toLocaleString()}`, icon: Icons.Tag, color: "purple" }
+                    ].map((stat, i) => (
+                        <div key={i} className="bg-white/50 backdrop-blur-xl p-5 rounded-[2rem] shadow-lg border border-white/50 hover:shadow-2xl hover:bg-white/70 hover:-translate-y-1 transition-all duration-300 group">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className={`p-3 rounded-2xl bg-${stat.color}-100/50 text-${stat.color}-600 shadow-sm group-hover:scale-110 transition-transform backdrop-blur-md border border-${stat.color}-200/30`}>
+                                  <stat.icon className="w-6 h-6" />
+                                </div>
+                                {loadingAdmin && <Icons.Loader className="w-4 h-4 animate-spin text-slate-400"/>}
+                            </div>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{stat.label}</p>
+                            <h3 className={`text-3xl font-black text-slate-800 mt-1 tracking-tight ${loadingAdmin ? 'animate-pulse opacity-50' : ''}`}>
+                            {stat.val}
+                            </h3>
+                        </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* CHARTS */}
+                {["admin", "staff"].includes(user.role) && stats && (
+                    <DashboardCharts apps={allApps} stats={stats} />
+                )}
+
+                {/* 2. TABEL PERMOHONAN (GLASS TABLE) */}
+                <div className="bg-white/40 rounded-[2rem] border border-white/50 overflow-hidden shadow-inner backdrop-blur-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-blue-50/50 text-xs font-extrabold text-slate-600 uppercase backdrop-blur-md border-b border-blue-100/30">
+                        <tr>
+                          <th className="p-6">ID / Tarikh</th>
+                          <th className="p-6">Profil Pemohon</th>
+                          <th className="p-6">Aset Diminta</th>
+                          <th className="p-6 text-center">Status Semasa</th>
+                          <th className="p-6 text-center">Tindakan</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200/30">
+                        {loadingAdmin ? (
+                          <tr><td colSpan="5" className="p-12 text-center text-slate-500"><Icons.Loader className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-500"/>Memuatkan Data...</td></tr>
+                        ) : allApps.length === 0 ? (
+                          <tr><td colSpan="5" className="p-12 text-center text-slate-400 italic">Tiada permohonan dijumpai.</td></tr>
+                        ) : (
+                          allApps.filter(app => { 
+                              // Filter logic: Approver tak perlu tengok yang belum diproses staff
+                              if (user.role === 'approver') return app.status !== "Dalam Proses"; 
+                              return true; 
+                          }).map((app, index) => (
+                            <tr key={index} onClick={() => setSelectedAdminApp(app)} className="hover:bg-white/50 cursor-pointer transition-colors group">
+                              
+                              {/* 1. ID & Tarikh */}
+                              <td className="p-6 align-top w-32">
+                                 <div className="font-mono text-xs font-black text-blue-700 bg-blue-100/50 px-2 py-1 rounded border border-blue-200/50 w-fit backdrop-blur-sm shadow-sm mb-2">
+                                    {app.appId}
+                                 </div>
+                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center">
+                                    <Icons.Calendar className="w-3 h-3 mr-1"/> {app.dateTime}
+                                 </div>
+                              </td>
+
+                              {/* 2. Pemohon */}
+                              <td className="p-6 align-top">
+                                 <div className="flex items-start">
+                                    <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs mr-3 border border-indigo-200">
+                                       {app.nama ? app.nama.charAt(0).toUpperCase() : "?"}
+                                    </div>
+                                    <div>
+                                       <div className="font-bold text-slate-800 text-sm line-clamp-1">{app.nama}</div>
+                                       <div className="text-xs text-slate-500 font-medium">{app.email}</div>
+                                       <div className="text-[10px] text-slate-400 mt-0.5">{app.phone || "-"}</div>
+                                    </div>
+                                 </div>
+                              </td>
+
+                              {/* 3. Aset */}
+                              <td className="p-6 align-top">
+                                 <div className="font-bold text-slate-700 text-sm mb-1">{app.lokasi}</div>
+                                 <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 border border-slate-200 text-slate-500">
+                                    {app.jenis}
+                                 </span>
+                                 <div className="mt-1 text-xs font-bold text-blue-600">
+                                    RM {app.hargaAsal}
+                                 </div>
+                              </td>
+
+                              {/* 4. Status (Pill Design) */}
+                              <td className="p-6 align-top text-center">
+                                 <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase shadow-sm border tracking-wide ${
+                                    app.status === "Berjaya" || app.status === "Lulus" ? "bg-green-100/80 text-green-700 border-green-200" :
+                                    app.status === "Menunggu Persetujuan" ? "bg-orange-100/80 text-orange-700 border-orange-200 animate-pulse" :
+                                    app.status === "Disokong" ? "bg-blue-100/80 text-blue-700 border-blue-200" :
+                                    app.status.includes("Tolak") || app.status.includes("Batal") ? "bg-red-100/80 text-red-700 border-red-200" : 
+                                    "bg-yellow-100/80 text-yellow-700 border-yellow-200"
+                                 }`}>
+                                    {app.status === "Menunggu Persetujuan" && <span className="w-1.5 h-1.5 bg-orange-500 rounded-full mr-2 animate-ping"></span>}
+                                    {app.status}
+                                 </span>
+                              </td>
+
+                              {/* 5. Tindakan */}
+                              <td className="p-6 align-top text-center">
+                                 <button className="bg-white/70 hover:bg-blue-50 text-slate-400 hover:text-blue-600 p-2.5 rounded-xl shadow-sm border border-white/60 transition-all group-hover:scale-110 hover:shadow-md">
+                                    <Icons.Edit className="w-4 h-4"/>
+                                 </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- TAB 5: ASSETS (UI ASAL + BUTTON TOGGLE FORM) --- */}
+            {tab === "assets" && (
+              <div className="animate-fade-in space-y-8 relative z-10">
+                 
+                 {/* 1. HEADER RINGKASAN ASET (UI ASAL + BUTTON TOGGLE) */}
+                 <div className="bg-teal-50/50 backdrop-blur-md p-5 rounded-[2rem] border border-teal-100/50 shadow-sm flex flex-col gap-6">
+                    {/* Baris Atas: Info & Stats */}
+                    <div className="flex flex-col md:flex-row justify-between items-center">
+                        <div className="flex items-center mb-4 md:mb-0">
+                           <div className="p-3 bg-teal-100 rounded-2xl mr-4 text-teal-700 shadow-sm border border-teal-200">
+                              <Icons.Building className="w-8 h-8"/>
+                           </div>
+                           <div>
+                              <h3 className="font-bold text-2xl text-slate-800 tracking-tight">Inventori Aset</h3>
+                              <p className="text-sm text-slate-500 font-medium">Urus fasiliti, kuarters & ruang niaga.</p>
+                           </div>
+                        </div>
+                        
+                        {/* STATS + BUTTON TAMBAH (Modified Right Side) */}
+                        <div className="flex items-center gap-4">
+                            {/* Butang Toggle Form (Baru) */}
+                            {user.role === "admin" && (
+                                <button 
+                                    onClick={() => setShowAssetForm(!showAssetForm)}
+                                    className={`flex items-center px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm border ${showAssetForm ? "bg-red-50 text-red-600 border-red-200" : "bg-white/60 text-teal-700 border-white/50 hover:bg-white"}`}
+                                >
+                                    {showAssetForm ? <><Icons.X className="w-4 h-4 mr-2"/> Tutup Borang</> : <><Icons.Plus className="w-4 h-4 mr-2"/> Tambah Aset</>}
+                                </button>
+                            )}
+
+                            <div className="flex bg-white/40 rounded-xl border border-white/50 backdrop-blur-sm">
+                                <div className="text-center px-4 py-2 border-r border-slate-300/30">
+                                    <span className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider">Jumlah</span>
+                                    <span className="text-lg font-black text-slate-700">{allAssets.length}</span>
+                                </div>
+                                <div className="text-center px-4 py-2">
+                                    <span className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider">Aktif</span>
+                                    <span className="text-lg font-black text-green-600">{allAssets.filter(a => a.status === 'Aktif').length}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Baris Bawah: Input Carian */}
+                    <div className="relative w-full">
+                        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-teal-700 pointer-events-none">
+                            <Icons.Search className="w-5 h-5"/>
+                        </div>
+                        <input 
+                            type="text" 
+                            placeholder="Cari aset..." 
+                            value={assetSearch}
+                            onChange={(e) => setAssetSearch(e.target.value)}
+                            className="w-full pl-12 pr-4 py-3 rounded-xl border border-white/60 bg-white/50 focus:bg-white outline-none text-sm font-bold text-slate-700 shadow-sm transition-all placeholder:font-normal placeholder:text-slate-400"
+                        />
+                    </div>
+                 </div>
+
+                 {/* 2. BORANG TAMBAH / EDIT ASET (CONDITIONAL RENDERING) */}
+                 {(showAssetForm || editMode) && user.role === "admin" && (
+                   <div className={`p-8 rounded-[2rem] border shadow-xl transition-all duration-500 backdrop-blur-xl animate-fade-in ${editMode ? "bg-orange-50/80 border-orange-200 ring-2 ring-orange-200/50" : "bg-white/40 border-white/60 hover:shadow-2xl hover:bg-white/60"}`}>
+                      <form onSubmit={handleSaveAsset}>
+                         <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-200/30">
+                            <h4 className="font-extrabold text-xl text-slate-800 flex items-center">
+                               {editMode ? <><Icons.Edit className="w-5 h-5 mr-2 text-orange-600"/> Kemaskini Aset</> : <><Icons.Plus className="w-5 h-5 mr-2 text-blue-600"/> Tambah Aset Baru</>}
+                            </h4>
+                            {/* Butang Tutup dalam Form */}
+                            <button type="button" onClick={() => { setEditMode(false); setShowAssetForm(false); setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" }); }} className="text-red-500 text-xs font-bold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                               {editMode ? "Batal Edit" : "Tutup"}
+                            </button>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            {/* Input Fields (Sama seperti asal) */}
+                            <div className="md:col-span-2">
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Nama Aset</label>
+                               <input required value={assetForm.nama} onChange={e => setAssetForm({...assetForm, nama: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white focus:ring-4 focus:ring-blue-500/10 outline-none text-sm font-bold text-slate-700 shadow-sm backdrop-blur-sm transition-all" placeholder="Contoh: Kuarters Gred F (Unit 1)"/>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Kategori</label>
+                               <div className="relative">
+                                   <select value={assetForm.kategori} onChange={e => setAssetForm({...assetForm, kategori: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-semibold text-slate-600 shadow-sm backdrop-blur-sm appearance-none cursor-pointer hover:bg-white/70">
+                                      <option value="">-- Pilih Kategori --</option>
+                                      <option value="Kuarters">Kuarters Kediaman</option>
+                                      <option value="Kompleks">Kompleks LKIM</option>
+                                      <option value="Pasar Nelayan">Pasar Nelayan</option>
+                                      <option value="Bilik Sejuk">Bilik Sejuk (Cold Room)</option>
+                                      <option value="Jeti">Jeti Pendaratan</option>
+                                      <option value="Slipway">Slipway (Penyelenggaraan Bot)</option>
+                                      <option value="Tanah">Tanah / Lot Industri</option>
+                                      <option value="Akuakultur">Tapak Akuakultur</option>
+                                      <option value="CCDC">CCDC / Pusat Latihan</option>
+                                      <option value="Lot Kedai">Lot Kedai / Niaga</option>
+                                      <option value="Pejabat">Ruang Pejabat</option>
+                                      <option value="Rumah Rehat">Rumah Rehat</option>
+                                   </select>
+                                   <div className="absolute right-4 top-4 pointer-events-none opacity-50"><Icons.ChevronDown className="w-4 h-4"/></div>
+                               </div>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Harga Sewaan (RM)</label>
+                               <div className="relative">
+                                  <span className="absolute left-4 top-4 text-slate-400 font-bold">RM</span>
+                                  <input type="number" step="0.01" required value={assetForm.harga} onChange={e => setAssetForm({...assetForm, harga: e.target.value})} className="w-full p-4 pl-12 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-black text-blue-900 shadow-sm backdrop-blur-sm focus:bg-white transition-all"/>
+                               </div>
+                            </div>
+                            <div className="md:col-span-2">
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Lokasi</label>
+                               <input required value={assetForm.lokasi} onChange={e => setAssetForm({...assetForm, lokasi: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="Contoh: LKIM Batu Maung"/>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Kekosongan (Unit)</label>
+                               <input required value={assetForm.kekosongan} onChange={e => setAssetForm({...assetForm, kekosongan: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-bold text-center text-green-700 shadow-sm backdrop-blur-sm" placeholder="Contoh: 5"/>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Status Semasa</label>
+                               <div className="relative">
+                                   <select value={assetForm.status} onChange={e => setAssetForm({...assetForm, status: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-bold shadow-sm backdrop-blur-sm appearance-none cursor-pointer">
+                                      <option value="Aktif">🟢 Aktif (Boleh Disewa)</option>
+                                      <option value="Penyelenggaraan">🟠 Penyelenggaraan</option>
+                                      <option value="Ditutup">🔴 Ditutup Sementara</option>
+                                      <option value="Penuh">⚫ Penuh</option>
+                                   </select>
+                                   <div className="absolute right-4 top-4 pointer-events-none opacity-50"><Icons.ChevronDown className="w-4 h-4"/></div>
+                               </div>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Saiz / Keluasan</label>
+                               <input value={assetForm.saiz} onChange={e => setAssetForm({...assetForm, saiz: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="Contoh: 1200 kps"/>
+                            </div>
+                            <div>
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Info Tambahan</label>
+                               <input value={assetForm.info} onChange={e => setAssetForm({...assetForm, info: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="Contoh: Tingkat 2, Ada Lift"/>
+                            </div>
+                            <div className="md:col-span-2">
+                               <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Deskripsi Lengkap</label>
+                               <textarea rows="2" value={assetForm.deskripsi} onChange={e => setAssetForm({...assetForm, deskripsi: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm resize-none"></textarea>
+                            </div>
+                         </div>
+
+                         <button disabled={loading} className={`w-full py-4 rounded-xl font-extrabold text-white shadow-lg transition-transform hover:scale-[1.01] active:scale-95 flex justify-center items-center ${editMode ? "bg-gradient-to-r from-orange-600 to-orange-500 shadow-orange-500/30" : "bg-gradient-to-r from-blue-700 to-blue-600 shadow-blue-600/30"}`}>
+                            {loading ? <Icons.Loader className="w-5 h-5 animate-spin"/> : editMode ? "SIMPAN KEMASKINI" : "TAMBAH ASET SEKARANG"}
+                         </button>
+                      </form>
+                   </div>
+                 )}
+
+                 {/* 3. SENARAI ASET (UI ASAL + LOGIK GROUPING/ACCORDION) */}
+                 {loadingAdmin ? (
+                  <div className="bg-white/40 rounded-[2rem] border border-white/50 p-16 flex flex-col items-center justify-center backdrop-blur-sm shadow-inner">
+                      <Icons.Loader className="w-10 h-10 animate-spin text-teal-600 mb-4"/>
+                      <h3 className="text-slate-600 font-bold text-lg">Mengemaskini Inventori Aset...</h3>
+                      <p className="text-slate-400 text-sm">Sila tunggu sebentar.</p>
+                  </div>
+                ) : (
+                  (() => {
+                    // Logic Tapisan & Grouping
+                    const filtered = allAssets.filter(a => 
+                        (a.nama || "").toLowerCase().includes(assetSearch.toLowerCase()) || 
+                        (a.lokasi || "").toLowerCase().includes(assetSearch.toLowerCase()) ||
+                        (a.kategori || "").toLowerCase().includes(assetSearch.toLowerCase())
+                    );
+
+                    const grouped = filtered.reduce((groups, asset) => {
+                        const cat = asset.kategori || "Lain-lain";
+                        if (!groups[cat]) groups[cat] = [];
+                        groups[cat].push(asset);
+                        return groups;
+                    }, {});
+
+                    const sortedCats = Object.keys(grouped).sort();
+                    const isSearching = assetSearch.length > 0;
+
+                    if (sortedCats.length === 0) {
+                        return (
+                            <div className="bg-white/40 rounded-[2rem] border border-white/50 p-12 text-center text-slate-400 italic backdrop-blur-sm">
+                                Tiada aset dijumpai.
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div className="space-y-6">
+                            {sortedCats.map(category => {
+                                const isOpen = isSearching || expandedCats[category];
+
+                                return (
+                                    <div key={category} className="transition-all">
+                                        
+                                        {/* HEADER KATEGORI (ACCORDION TOGGLE) */}
+                                        <div 
+                                            onClick={() => !isSearching && toggleCat(category)}
+                                            className={`flex items-center justify-between p-4 cursor-pointer mb-2 rounded-2xl border transition-all ${isOpen ? "bg-white/60 border-teal-200/50 shadow-sm" : "bg-white/30 border-white/40 hover:bg-white/50"}`}
+                                        >
+                                            <div className="flex items-center">
+                                                <div className={`p-2 rounded-xl mr-3 shadow-sm ${isOpen ? "bg-teal-100 text-teal-700" : "bg-white/60 text-slate-400"}`}>
+                                                    <Icons.Layers className="w-5 h-5"/>
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-lg text-slate-700">{category}</h4>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{grouped[category].length} Unit</p>
+                                                </div>
+                                            </div>
+                                            {!isSearching && (
+                                                <div className={`p-2 rounded-full transition-transform duration-300 ${isOpen ? "rotate-180 bg-teal-50" : "bg-white/50"}`}>
+                                                    <Icons.ChevronDown className="w-4 h-4 text-slate-500"/>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* TABLE CONTAINER (GAYA UI ASAL - HANYA MUNCUL BILA OPEN) */}
+                                        {isOpen && (
+                                            <div className="bg-white/40 rounded-[2rem] border border-white/50 overflow-hidden shadow-inner backdrop-blur-sm animate-fade-in">
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left border-collapse">
+                                                        <thead className="bg-teal-50/50 text-xs font-extrabold text-slate-600 uppercase backdrop-blur-md border-b border-teal-100/30">
+                                                            <tr>
+                                                                <th className="p-6">Profil Aset</th>
+                                                                <th className="p-6">Spesifikasi</th>
+                                                                <th className="p-6 text-center">Status & Kekosongan</th>
+                                                                <th className="p-6 text-right">Kadar Sewa</th>
+                                                                <th className="p-6 text-center">Tindakan</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-200/30">
+                                                            {grouped[category].map((a, i) => (
+                                                                <tr key={i} className="hover:bg-white/40 transition-colors group">
+                                                                    {/* 1. Profil */}
+                                                                    <td className="p-6 align-top">
+                                                                        <div className="flex items-start">
+                                                                            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-slate-500 shadow-sm mr-4 border border-white/50">
+                                                                                <Icons.Home className="w-5 h-5 text-slate-600"/>
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="font-bold text-slate-800 text-sm leading-tight">{a.nama}</div>
+                                                                                <div className="text-xs text-slate-500 mt-1 flex items-center">
+                                                                                    <Icons.MapPin className="w-3 h-3 mr-1 text-red-400"/> {a.lokasi}
+                                                                                </div>
+                                                                                <span className="inline-block mt-2 text-[9px] font-bold uppercase tracking-wider bg-slate-100/60 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full">
+                                                                                    {a.kategori}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* 2. Spesifikasi */}
+                                                                    <td className="p-6 align-top text-sm text-slate-600">
+                                                                        <div className="space-y-1">
+                                                                            <div className="flex items-center"><span className="w-16 text-[10px] font-bold uppercase text-slate-400">Saiz:</span> {a.saiz || "-"}</div>
+                                                                            <div className="flex items-center"><span className="w-16 text-[10px] font-bold uppercase text-slate-400">Info:</span> {a.info || "-"}</div>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* 3. Status & Kekosongan */}
+                                                                    <td className="p-6 align-top text-center">
+                                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-extrabold uppercase shadow-sm border ${
+                                                                            a.status === 'Aktif' ? 'bg-green-100/80 text-green-700 border-green-200' : 
+                                                                            a.status === 'Penyelenggaraan' ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                                                                            'bg-red-100/80 text-red-700 border-red-200'
+                                                                        }`}>
+                                                                            <span className={`w-1.5 h-1.5 rounded-full mr-2 ${a.status === 'Aktif' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                                                                            {a.status}
+                                                                        </span>
+                                                                        <div className="mt-3 flex flex-col items-center">
+                                                                            <span className="text-xs font-bold text-slate-500 mb-1">{a.kekosongan} Unit Kosong</span>
+                                                                            <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                                                <div className={`h-full rounded-full ${parseInt(a.kekosongan) > 0 ? 'bg-blue-500' : 'bg-red-500'}`} style={{width: parseInt(a.kekosongan) > 0 ? '70%' : '100%'}}></div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+
+                                                                    {/* 4. Harga */}
+                                                                    <td className="p-6 align-top text-right">
+                                                                        <div className="font-black text-slate-800 text-lg">
+                                                                            <span className="text-xs text-slate-400 font-medium mr-1">RM</span>
+                                                                            {a.harga ? parseFloat(a.harga).toLocaleString() : "0.00"}
+                                                                        </div>
+                                                                        <div className="text-[10px] text-slate-400 uppercase font-bold">Sebulan</div>
+                                                                    </td>
+
+                                                                    {/* 5. Tindakan */}
+                                                                    <td className="p-6 align-top text-center">
+                                                                        {user.role === 'admin' && (
+                                                                            <div className="flex justify-center space-x-2">
+                                                                                {/* Butang Edit - Akan buka borang secara automatik */}
+                                                                                <button 
+                                                                                    onClick={() => { 
+                                                                                        handleEditAssetClick(a); 
+                                                                                        setShowAssetForm(true); // Buka borang
+                                                                                        document.querySelector('form').scrollIntoView({behavior:'smooth'}); 
+                                                                                    }} 
+                                                                                    className="bg-white/60 p-2.5 rounded-xl border border-white/50 text-blue-600 hover:bg-blue-50 hover:shadow-md transition-all" 
+                                                                                    title="Edit Aset"
+                                                                                >
+                                                                                    <Icons.Edit className="w-4 h-4"/>
+                                                                                </button>
+                                                                                <button onClick={() => handleDeleteItem('asset', a.id)} className="bg-white/60 p-2.5 rounded-xl border border-white/50 text-red-600 hover:bg-red-50 hover:shadow-md transition-all" title="Padam Aset">
+                                                                                    <Icons.Trash className="w-4 h-4"/>
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                 })())}
+             </div>
+           )}
+
+           {/* --- TAB 6: BANNERS --- */}
+           {tab === "banners" && (
+              <div className="animate-fade-in space-y-8 relative z-10">
+                
+                {/* 1. HEADER */}
+                <div className="flex flex-col md:flex-row justify-between items-center bg-indigo-50/50 backdrop-blur-md p-5 rounded-[2rem] border border-indigo-100/50 shadow-sm">
+                    <div className="flex items-center mb-4 md:mb-0">
+                      <div className="p-3 bg-indigo-100 rounded-2xl mr-4 text-indigo-600 shadow-sm border border-indigo-200">
+                          <Icons.Image className="w-8 h-8"/>
+                      </div>
+                      <div>
+                          <h3 className="font-bold text-2xl text-slate-800 tracking-tight">Banner Halaman Utama</h3>
+                          <p className="text-sm text-slate-500 font-medium">Urus gambar slider untuk pengumuman terkini.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        {/* Butang Refresh Kecil */}
+                        <button 
+                          onClick={() => { setLoading(true); google.script.run.withSuccessHandler(d => { setAllBanners(d.banners || []); setLoading(false); }).getAdminData(); }}
+                          className="p-3 rounded-xl bg-white/60 text-indigo-600 border border-indigo-200 hover:bg-indigo-50 transition-colors shadow-sm"
+                          title="Refresh Senarai Banner"
+                        >
+                          <Icons.Refresh className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}/>
+                        </button>
+
+                        {/* Butang Toggle Form */}
+                        <button 
+                          onClick={() => { setShowBannerForm(!showBannerForm); if(editingBanner) setEditingBanner(null); setBannerForm({ title: "", subtitle: "", expiry: "", url: "" }); }} 
+                          className={`px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center ${showBannerForm ? 'bg-slate-200 text-slate-600' : 'bg-gradient-to-r from-green-600 to-green-500 text-white hover:shadow-green-500/30'}`}
+                        >
+                          {showBannerForm ? <><Icons.X className="w-4 h-4 mr-2"/> Tutup Borang</> : <><Icons.Plus className="w-4 h-4 mr-2"/> Tambah Banner</>}
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. BORANG UPLOAD / EDIT (Hanya muncul jika showBannerForm === true) */}
+                {showBannerForm && (
+                    <div className={`backdrop-blur-xl p-8 rounded-[2rem] border shadow-xl relative overflow-hidden transition-all duration-500 animate-fade-in-down ${editingBanner ? "bg-yellow-50/80 border-yellow-200" : "bg-white/40 border-white/60"}`}>
+                        
+                        {/* Hiasan background */}
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <h4 className="font-extrabold text-lg text-slate-800 flex items-center">
+                              {editingBanner ? <><Icons.Edit className="w-5 h-5 mr-2 text-yellow-600"/> Kemaskini Banner</> : <><Icons.Plus className="w-5 h-5 mr-2 text-green-600"/> Muat Naik Banner Baru</>}
+                            </h4>
+                            {editingBanner && (
+                              <button onClick={() => { setEditingBanner(null); setBannerForm({ title: "", subtitle: "", expiry: "", url: "" }); setShowBannerForm(false); }} className="text-red-500 text-xs font-bold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                                Batal Edit
+                              </button>
+                            )}
+                        </div>
+                        
+                        {/* Tukar onSubmit kepada wrapper atau handleAddBanner ikut keperluan */}
+                        <form onSubmit={editingBanner ? handleBannerSubmitWrapper : handleAddBanner} className="relative z-10">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                              
+                              {/* Input Gambar Custom */}
+                              <div className="md:col-span-2">
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">
+                                    Fail Gambar {editingBanner && <span className="text-red-500 normal-case italic ml-2">(Biarkan kosong jika tidak mahu tukar gambar)</span>}
+                                </label>
+                                <div className={`relative w-full p-3 rounded-xl border border-dashed transition-colors ${editingBanner ? "border-yellow-300 bg-yellow-50/50" : "border-slate-300 bg-slate-50/50 hover:bg-white/60"}`}>
+                                    <input 
+                                        type="file" 
+                                        name="imageFile" 
+                                        accept="image/*" 
+                                        required={!editingBanner} // Wajib hanya jika BUKAN sedang edit
+                                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
+                                    />
+                                </div>
+                                {/* Preview gambar asal jika sedang edit */}
+                                {editingBanner && (
+                                    <div className="mt-2 text-xs text-slate-500 flex items-center">
+                                        <span className="font-bold mr-2">Gambar Semasa:</span> 
+                                        <a href={getDriveImageUrl(editingBanner.image)} target="_blank" className="text-blue-600 hover:underline truncate max-w-xs">{editingBanner.title}</a>
+                                    </div>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Tajuk Utama</label>
+                                <input name="title" required value={bannerForm.title} onChange={e=>setBannerForm({...bannerForm, title: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white outline-none text-sm font-bold text-slate-700 shadow-sm backdrop-blur-sm transition-all" placeholder="Contoh: Selamat Datang"/>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Sub-Tajuk</label>
+                                <input name="subtitle" required value={bannerForm.subtitle} onChange={e=>setBannerForm({...bannerForm, subtitle: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white outline-none text-sm font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all" placeholder="Contoh: Info Terkini LKIM"/>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Tarikh Tamat Paparan</label>
+                                <input name="expiry" type="date" value={bannerForm.expiry} onChange={e=>setBannerForm({...bannerForm, expiry: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white outline-none text-sm font-bold text-slate-700 shadow-sm backdrop-blur-sm transition-all"/>
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Pautan URL (Pilihan)</label>
+                                <input name="url" value={bannerForm.url} onChange={e=>setBannerForm({...bannerForm, url: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white outline-none text-sm text-blue-600 shadow-sm backdrop-blur-sm transition-all" placeholder="https://..."/>
+                              </div>
+                          </div>
+                          
+                          <button disabled={uploading} className={`w-full py-4 rounded-xl font-extrabold text-white shadow-lg transition-transform hover:scale-[1.01] active:scale-95 flex justify-center items-center ${editingBanner ? "bg-gradient-to-r from-yellow-500 to-yellow-600 shadow-yellow-500/30" : "bg-gradient-to-r from-green-600 to-green-500 shadow-green-500/30"}`}>
+                              {uploading ? <><Icons.Loader className="w-5 h-5 animate-spin mr-2"/> Memproses...</> : editingBanner ? "SIMPAN KEMASKINI" : "MUAT NAIK BANNER"}
+                          </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* 3. GALERI BANNER */}
+                {loadingAdmin ? (
+                // --- TAMBAHAN BARU: VISUAL LOADING BANNER ---
+                <div className="flex flex-col items-center justify-center py-24 bg-white/30 rounded-[2rem] border border-white/40 backdrop-blur-sm">
+                    <Icons.Loader className="w-10 h-10 animate-spin text-indigo-600 mb-4"/>
+                    <span className="font-bold text-slate-600">Memuat turun Banner Terkini...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {allBanners.map((b, i) => (
+                      <div key={i} className="group relative rounded-[2rem] overflow-hidden shadow-lg border border-white/50 bg-white/30 backdrop-blur-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
+                          {/* Gambar */}
+                          <div className="h-48 w-full relative overflow-hidden">
+                            <img src={getDriveImageUrl(b.image)} className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-700"/>
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 to-transparent"></div>
+                            
+                            {/* Badge Expired */}
+                            {b.expiry && (
+                                <div className="absolute top-4 left-4 bg-black/50 backdrop-blur text-white text-[10px] font-bold px-3 py-1 rounded-full border border-white/20">
+                                  Tamat: {b.expiry}
+                                </div>
+                            )}
+                          </div>
+
+                          {/* Info Text */}
+                          <div className="p-6 relative">
+                            <h4 className="font-extrabold text-slate-800 text-lg leading-tight mb-1">{b.title}</h4>
+                            <p className="text-xs text-slate-500 font-medium line-clamp-2">{b.subtitle}</p>
+                          </div>
+
+                          {/* ACTION BUTTONS (Muncul Hover) */}
+                          <div className="absolute top-4 right-4 flex space-x-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                              {/* Butang Edit */}
+                              <button 
+                                onClick={() => { 
+                                    setEditingBanner(b); 
+                                    setBannerForm({ title: b.title, subtitle: b.subtitle, expiry: b.expiry, url: b.url || "" }); 
+                                    window.scrollTo({top:0, behavior:'smooth'});
+                                }} 
+                                className="bg-white/90 text-blue-500 p-2.5 rounded-full shadow-lg hover:bg-blue-50 hover:scale-110 transition-all"
+                                title="Edit Banner"
+                              >
+                                <Icons.Edit className="w-4 h-4"/>
+                              </button>
+
+                              {/* Butang Delete */}
+                              <button 
+                                onClick={() => handleDeleteItem('banner', b.rowIndex)} 
+                                className="bg-white/90 text-red-500 p-2.5 rounded-full shadow-lg hover:bg-red-50 hover:scale-110 transition-all"
+                                title="Padam Banner"
+                              >
+                                <Icons.Trash className="w-4 h-4"/>
+                              </button>
+                          </div>
+                      </div>
+                    ))}
+                </div>
+                )}
+              </div>
+            )}
+
+           {/* --- TAB 7: USERS --- */}
+           {tab === "users" && (
+              <div className="animate-fade-in space-y-8 relative z-10">
+                
+                {/* 1. HEADER RINGKASAN PENGGUNA */}
+                <div className="flex flex-col md:flex-row justify-between items-center bg-purple-50/50 backdrop-blur-md p-5 rounded-[2rem] border border-purple-100/50 shadow-sm">
+                    <div className="flex items-center mb-4 md:mb-0">
+                      <div className="p-3 bg-purple-100 rounded-2xl mr-4 text-purple-700 shadow-sm border border-purple-200">
+                          <Icons.User className="w-8 h-8"/>
+                      </div>
+                      <div>
+                          <h3 className="font-bold text-2xl text-slate-800 tracking-tight">Pangkalan Data Pengguna</h3>
+                          <p className="text-sm text-slate-500 font-medium">Urus akses, peranan staf & orang awam.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="text-center px-4 border-r border-slate-300/30">
+                            <span className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total</span>
+                            <span className="text-2xl font-black text-slate-700">{allUsers.length}</span>
+                        </div>
+                        <div className="text-center px-4">
+                            <span className="block text-[10px] font-bold uppercase text-slate-400 tracking-wider">Admin/Staf</span>
+                            <span className="text-2xl font-black text-purple-600">
+                              {allUsers.filter(u => u.role === 'admin' || u.role === 'staff' || u.role === 'approver').length}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. ACTIONS BAR: BUTTON TOGGLE FORM & SEARCH */}
+                <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
+                    {/* Butang Buka/Tutup Borang */}
+                    <button 
+                      onClick={() => { setShowForm(!showForm); if(editingUser) setEditingUser(null); }} 
+                      className={`px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-all flex items-center ${showForm ? 'bg-slate-200 text-slate-600' : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white hover:shadow-blue-500/30'}`}
+                    >
+                      {showForm ? <><Icons.X className="w-4 h-4 mr-2"/> Tutup Borang</> : <><Icons.Plus className="w-4 h-4 mr-2"/> Daftar Pengguna Baru</>}
+                    </button>
+
+                    {/* Input Carian */}
+                    <div className="relative w-full md:w-1/3">
+                      <input 
+                          type="text" 
+                          placeholder="Cari Nama, Email atau Role..." 
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-3 rounded-xl border border-white/60 bg-white/40 focus:bg-white/80 outline-none text-sm font-medium text-slate-700 shadow-sm backdrop-blur-sm transition-all"
+                      />
+                      <div className="absolute left-3 top-3.5 text-slate-400">
+                          <Icons.Search className="w-4 h-4"/>
+                      </div>
+                    </div>
+                </div>
+
+                {/* 3. BORANG DAFTAR / EDIT (GLASS CARD) - HANYA MUNCUL JIKA SHOWFORM TRUE */}
+                {showForm && (
+                    <div className={`p-8 rounded-[2rem] border shadow-xl transition-all duration-500 backdrop-blur-xl animate-fade-in-down ${editingUser ? "bg-yellow-50/80 border-yellow-200 ring-2 ring-yellow-200/50" : "bg-white/40 border-white/60 hover:shadow-2xl hover:bg-white/60"}`}>
+                        <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-200/30">
+                          <h4 className="font-extrabold text-xl text-slate-800 flex items-center">
+                              {editingUser ? <><Icons.Edit className="w-5 h-5 mr-2 text-yellow-600"/> Kemaskini Profil</> : <><Icons.Plus className="w-5 h-5 mr-2 text-blue-600"/> Daftar Pengguna Baru</>}
+                          </h4>
+                          {editingUser && (
+                              <button onClick={() => { setEditingUser(null); setUserForm({ email: "", password: "", nama: "", noTelefon: "", syarikat: "", role: "user" }); setShowForm(false); }} className="text-red-500 text-xs font-bold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                                Batal Edit
+                              </button>
+                          )}
+                        </div>
+                        
+                        <form onSubmit={handleUserSubmit}>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                              {/* Nama */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Nama Penuh</label>
+                                <input required value={userForm.nama} onChange={e=>setUserForm({...userForm, nama: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 focus:bg-white focus:ring-4 focus:ring-purple-500/10 outline-none text-sm font-bold text-slate-700 shadow-sm backdrop-blur-sm transition-all" placeholder="Nama Penuh"/>
+                              </div>
+                              
+                              {/* Email */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Alamat Emel</label>
+                                <input type="email" required disabled={editingUser} value={userForm.email} onChange={e=>setUserForm({...userForm, email: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 disabled:bg-slate-200/50 outline-none text-sm font-medium text-slate-600 shadow-sm backdrop-blur-sm transition-all" placeholder="user@email.com"/>
+                              </div>
+                              
+                              {/* Telefon */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">No. Telefon</label>
+                                <input required value={userForm.noTelefon} onChange={e=>setUserForm({...userForm, noTelefon: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="012-3456789"/>
+                              </div>
+                              
+                              {/* Role Dropdown */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Peranan Sistem</label>
+                                <div className="relative">
+                                    <select value={userForm.role} onChange={e=>setUserForm({...userForm, role: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-bold text-slate-700 shadow-sm backdrop-blur-sm appearance-none cursor-pointer">
+                                      <option value="user">👤 User (Awam)</option>
+                                      <option value="staff">👔 Staff (Pemproses)</option>
+                                      <option value="approver">⭐ Approver (Penglulus)</option>
+                                      <option value="admin">👑 Admin (Sistem)</option>
+                                    </select>
+                                    <div className="absolute right-4 top-4 pointer-events-none opacity-50"><Icons.ChevronDown className="w-4 h-4"/></div>
+                                </div>
+                              </div>
+                              
+                              {/* Password (Hanya untuk daftar baru) */}
+                              {!editingUser && (
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Kata Laluan</label>
+                                    <input type="password" required minLength="6" value={userForm.password} onChange={e=>setUserForm({...userForm, password: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="******"/>
+                                </div>
+                              )}
+                              
+                              {/* Syarikat */}
+                              <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Syarikat / Organisasi</label>
+                                <input value={userForm.syarikat} onChange={e=>setUserForm({...userForm, syarikat: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="Pilihan"/>
+                              </div>
+                          </div>
+                          
+                          <button disabled={loading} className={`w-full py-4 rounded-xl font-extrabold text-white shadow-lg transition-transform hover:scale-[1.01] active:scale-95 flex justify-center items-center ${editingUser ? "bg-gradient-to-r from-yellow-500 to-yellow-600 shadow-yellow-500/30" : "bg-gradient-to-r from-purple-700 to-purple-600 shadow-purple-600/30"}`}>
+                              {loading ? <Icons.Loader className="w-5 h-5 animate-spin"/> : editingUser ? "SIMPAN PERUBAHAN" : "DAFTAR PENGGUNA"}
+                          </button>
+                        </form>
+                    </div>
+                )}
+                
+                {/* 4. SENARAI PENGGUNA (TABLE + PAGINATION) */}
+                <div className="bg-white/40 rounded-[2rem] border border-white/50 overflow-hidden shadow-inner backdrop-blur-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                          <thead className="bg-purple-50/50 text-xs font-extrabold text-slate-600 uppercase backdrop-blur-md border-b border-purple-100/30">
+                            <tr>
+                                <th className="p-6">Profil Pengguna</th>
+                                <th className="p-6">Hubungi</th>
+                                <th className="p-6 text-center">Peranan</th>
+                                <th className="p-6 text-center">Status</th>
+                                <th className="p-6 text-center">Tindakan</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200/30">
+                            {/* GUNA currentUsers (Data Paginated) BUKAN allUsers */}
+                            {loadingAdmin ? (
+                                <tr>
+                                  <td colSpan="5" className="p-12 text-center">
+                                      <div className="flex flex-col items-center justify-center text-slate-500 animate-pulse">
+                                        <Icons.Loader className="w-8 h-8 animate-spin mb-3 text-purple-500"/>
+                                        <span className="text-sm font-bold">Mengemaskini Data Pengguna...</span>
+                                      </div>
+                                  </td>
+                                </tr>
+                            ) : currentUsers.length > 0 ? currentUsers.map((u, i) => (
+                                <tr key={i} className="hover:bg-white/40 transition-colors group">
+                                  {/* 1. Profil */}
+                                  <td className="p-6 align-top">
+                                      <div className="flex items-center">
+                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm mr-3 border-2 border-white ${
+                                            u.role === 'admin' ? 'bg-purple-600' : 
+                                            u.role === 'staff' ? 'bg-blue-600' :
+                                            u.role === 'approver' ? 'bg-orange-500' : 'bg-slate-400'
+                                        }`}>
+                                            {u.nama ? u.nama.charAt(0).toUpperCase() : "?"}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-slate-800 text-sm leading-tight flex items-center">
+                                              {u.nama}
+                                              {u.status === 'Nyahaktif' && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200 uppercase font-extrabold">Inactive</span>}
+                                            </div>
+                                            <div className="text-xs text-slate-500 mt-0.5">{u.email}</div>
+                                        </div>
+                                      </div>
+                                  </td>
+                                  
+                                  {/* 2. Info */}
+                                  <td className="p-6 align-top">
+                                      <div className="text-xs font-bold text-slate-600">{u.noTelefon || "-"}</div>
+                                      <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wide mt-1">{u.syarikat || "Persendirian"}</div>
+                                  </td>
+                                  
+                                  {/* 3. Role */}
+                                  <td className="p-6 align-top text-center">
+                                      <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-extrabold uppercase shadow-sm border ${
+                                        u.role === 'admin' ? 'bg-purple-100/80 text-purple-700 border-purple-200' : 
+                                        u.role === 'staff' ? 'bg-blue-100/80 text-blue-700 border-blue-200' :
+                                        u.role === 'approver' ? 'bg-orange-100/80 text-orange-700 border-orange-200' :
+                                        'bg-slate-100/80 text-slate-600 border-slate-200'
+                                      }`}>
+                                        {u.role}
+                                      </span>
+                                  </td>
+                                  
+                                  {/* 4. Status Online */}
+                                  <td className="p-6 align-top text-center">
+                                      {u.isOnline ? (
+                                        <span className="inline-flex items-center text-green-600 text-xs font-bold bg-green-50 px-2 py-1 rounded-full border border-green-200">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></span> Online
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-400 font-medium">
+                                            {u.lastSeen ? `Last: ${u.lastSeen}` : "Offline"}
+                                        </span>
+                                      )}
+                                  </td>
+                                  
+                                  {/* 5. Tindakan */}
+                                  <td className="p-6 align-top text-center">
+                                      <div className="flex justify-center space-x-2">
+                                        <button 
+                                            onClick={() => { setEditingUser(u); setUserForm({ email: u.email, password: "", nama: u.nama, noTelefon: u.noTelefon, syarikat: u.syarikat, role: u.role }); window.scrollTo({top:0,behavior:'smooth'}); }} 
+                                            className="bg-white/60 p-2 rounded-xl border border-white/50 text-blue-600 hover:bg-blue-50 hover:shadow-md transition-all" 
+                                            title="Edit Pengguna"
+                                        >
+                                            <Icons.Edit className="w-4 h-4"/>
+                                        </button>
+                                        
+                                        <button 
+                                            onClick={() => { if(confirm("Reset kata laluan pengguna ini?")) google.script.run.adminResetPass(u.email); }} 
+                                            className="bg-white/60 p-2 rounded-xl border border-white/50 text-orange-500 hover:bg-orange-50 hover:shadow-md transition-all" 
+                                            title="Reset Password"
+                                        >
+                                            <Icons.Key className="w-4 h-4"/>
+                                        </button>
+                                        
+                                        {user.role === 'admin' && (
+                                            <button 
+                                              onClick={() => { if(confirm(`Adakah anda pasti mahu ${u.status === 'Nyahaktif' ? 'mengaktifkan' : 'menyahaktifkan'} pengguna ini?`)) { setLoading(true); google.script.run.withSuccessHandler((r) => { setLoading(false); alert(r.message); fetchData(); }).adminToggleStatus(u.email, u.status === 'Nyahaktif' ? 'Aktif' : 'Nyahaktif'); }}} 
+                                              className={`bg-white/60 p-2 rounded-xl border border-white/50 hover:shadow-md transition-all ${u.status === 'Nyahaktif' ? 'text-gray-400 hover:text-green-600' : 'text-green-600 hover:text-red-600'}`} 
+                                              title="Aktif/Nyahaktif Akaun"
+                                            >
+                                              <Icons.Power className="w-4 h-4"/>
+                                            </button>
+                                        )}
+                                      </div>
+                                  </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                  <td colSpan="5" className="p-10 text-center text-slate-400 italic font-medium">
+                                      Tiada pengguna dijumpai untuk carian ini.
+                                  </td>
+                                </tr>
+                            )}
+                          </tbody>
+                      </table>
+                      
+                      {/* PAGINATION CONTROLS */}
+                      {filteredUsers.length > 0 && (
+                        <div className="p-4 border-t border-purple-100/30 bg-purple-50/30 flex justify-between items-center">
+                            <span className="text-xs font-bold text-slate-500">
+                              Menunjuk {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, filteredUsers.length)} daripada {filteredUsers.length}
+                            </span>
+                            <div className="flex space-x-2">
+                              <button 
+                                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                  disabled={currentPage === 1}
+                                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
+                              >
+                                  Prev
+                              </button>
+                              <span className="px-3 py-1 rounded-lg bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200">
+                                  {currentPage}
+                              </span>
+                              <button 
+                                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                  disabled={currentPage === totalPages}
+                                  className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
+                              >
+                                  Next
+                              </button>
+                            </div>
+                        </div>
+                      )}
+                    </div>
+                </div>
+              </div>
+            )}
+
+           {/* --- TAB 8: SETTINGS (DIPERBAIKI) --- */}
+            {tab === "settings" && (
+              <div className="animate-fade-in space-y-8 relative z-10">
+                 
+                 {/* Header Tab */}
+                 <div className="flex items-center bg-slate-800/80 backdrop-blur-md p-5 rounded-[2rem] border border-slate-700 shadow-sm text-white">
+                    <div className="p-3 bg-slate-700 rounded-2xl mr-4 text-white shadow-sm border border-slate-600">
+                       <Icons.Settings className="w-8 h-8"/>
+                    </div>
+                    <div>
+                       <h3 className="font-bold text-2xl tracking-tight">Konfigurasi Portal</h3>
+                       <p className="text-sm text-slate-400 font-medium">Ubah nama, logo dan maklumat hubungan laman web.</p>
+                    </div>
+                 </div>
+
+                 {/* Borang Tetapan */}
+                 <div className="bg-white/50 backdrop-blur-xl p-8 rounded-[2rem] border border-white/60 shadow-xl">
+                    <form onSubmit={handleSaveSettings}>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          
+                          {/* SEKSYEN 1: BRANDING */}
+                          <div className="space-y-6">
+                             <h4 className="font-bold text-blue-900 border-b border-blue-200 pb-2">Identiti Laman Web</h4>
+                             
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Nama Portal (Title)</label>
+                                <input required value={settingsForm.title} onChange={e=>setSettingsForm({...settingsForm, title: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/60 focus:bg-white outline-none text-sm font-bold text-slate-800" />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Sub-Tajuk (Subtitle)</label>
+                                <input required value={settingsForm.subtitle} onChange={e=>setSettingsForm({...settingsForm, subtitle: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/60 focus:bg-white outline-none text-sm text-slate-600" />
+                             </div>
+
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Logo Portal</label>
+                                <div className="flex items-center gap-4">
+                                   
+                                   {/* --- BAHAGIAN LOGO YANG TELAH DIBAIKI --- */}
+                                   <div className="h-24 w-24 bg-white rounded-xl shadow-sm border border-slate-200 p-2 flex items-center justify-center overflow-hidden relative">
+                                      {settingsForm.logo ? (
+                                        <img 
+                                          src={(() => {
+                                            // Logik untuk tukar link Drive kepada Thumbnail
+                                            const url = settingsForm.logo;
+                                            if (url && url.includes("drive.google.com")) {
+                                              const match = url.match(/id=([^&]+)/) || url.match(/\/d\/([^/]+)/);
+                                              if (match) return "https://drive.google.com/thumbnail?id=" + match[1] + "&sz=s1000";
+                                            }
+                                            return url;
+                                          })()}
+                                          alt="Logo Semasa" 
+                                          className="max-h-full max-w-full object-contain"
+                                          // Jika gambar masih rosak, sembunyikan gambar tersebut (elak ikon pecah)
+                                          onError={(e) => {e.target.style.display = 'none';}}
+                                        />
+                                      ) : (
+                                        <Icons.Image className="text-slate-300 w-8 h-8"/>
+                                      )}
+                                   </div>
+                                   {/* ---------------------------------------- */}
+
+                                   <div className="flex-grow">
+                                      <input type="file" name="logoFile" accept="image/*" className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer mb-2"/>
+                                      <p className="text-[10px] text-slate-400">Muat naik fail untuk tukar logo. Biarkan kosong jika tiada perubahan.</p>
+                                   </div>
+                                </div>
+                             </div>
+                          </div>
+
+                          {/* SEKSYEN 2: HUBUNGI KAMI */}
+                          <div className="space-y-6">
+                             <h4 className="font-bold text-orange-900 border-b border-orange-200 pb-2">Maklumat Perhubungan (Footer)</h4>
+                             
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">No. Telefon Rasmi</label>
+                                <input required value={settingsForm.phone} onChange={e=>setSettingsForm({...settingsForm, phone: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/60 focus:bg-white outline-none text-sm font-bold" />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Emel Rasmi</label>
+                                <input required value={settingsForm.email} onChange={e=>setSettingsForm({...settingsForm, email: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/60 focus:bg-white outline-none text-sm" />
+                             </div>
+                             <div>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Alamat Pejabat</label>
+                                <textarea rows="3" required value={settingsForm.address} onChange={e=>setSettingsForm({...settingsForm, address: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/60 focus:bg-white outline-none text-sm resize-none"></textarea>
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <div className="mt-8 pt-6 border-t border-slate-200/50">
+                          <button disabled={loading} className="w-full py-4 rounded-xl font-extrabold text-white bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 shadow-xl transition-transform hover:scale-[1.01] active:scale-95 flex justify-center items-center">
+                             {loading ? <><Icons.Loader className="w-5 h-5 animate-spin mr-2"/> Menyiapkan...</> : <><Icons.Save className="w-5 h-5 mr-2"/> SIMPAN TETAPAN</>}
+                          </button>
+                       </div>
+                    </form>
+                 </div>
+              </div>
+            )}
+
+            {/* --- TAB 9: LAPORAN --- */}
+            {tab === 'reports' && (
+              <div className="animate-fade-in p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-800">Ringkasan Laporan Inventori Aset</h2>
+                    <p className="text-sm text-slate-500">Status semasa aset LKIM mengikut kategori.</p>
+                  </div>
+                  <button
+                    onClick={() => window.print()} 
+                    className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow-lg"
+                  >
+                    <Icons.Printer className="w-4 h-4 mr-2" /> Cetak / Simpan PDF
+                  </button>
+                </div>
+
+                {/* KAD STATISTIK RINGKAS */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center">
+                    <div className="text-4xl font-black text-blue-900 mb-2">
+                      {reportData.reduce((acc, curr) => acc + curr.total, 0)}
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Jumlah Aset</div>
+                  </div>
+                  <div className="bg-green-50 p-6 rounded-2xl shadow-sm border border-green-100 flex flex-col items-center justify-center">
+                    <div className="text-4xl font-black text-green-600 mb-2">
+                      {reportData.reduce((acc, curr) => acc + curr.aktif, 0)}
+                    </div>
+                    <div className="text-xs font-bold text-green-800 uppercase tracking-widest">Aset Aktif</div>
+                  </div>
+                  <div className="bg-red-50 p-6 rounded-2xl shadow-sm border border-red-100 flex flex-col items-center justify-center">
+                    <div className="text-4xl font-black text-red-600 mb-2">
+                      {reportData.reduce((acc, curr) => acc + curr.tidakAktif, 0)}
+                    </div>
+                    <div className="text-xs font-bold text-red-800 uppercase tracking-widest">Tidak Aktif / Rosak</div>
+                  </div>
+                </div>
+
+                {/* JADUAL LAPORAN */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" id="print-area">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-600 uppercase text-xs font-bold tracking-wider border-b border-slate-200">
+                          <th className="p-4 w-10 text-center">Bil</th>
+                          <th className="p-4">Kategori Aset</th>
+                          <th className="p-4 text-center">Jumlah Unit</th>
+                          <th className="p-4 text-center text-green-700">Aktif</th>
+                          <th className="p-4 text-center text-red-600">Tidak Aktif</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {loadingReport ? (
+                          <tr>
+                            <td colSpan="5" className="p-8 text-center text-slate-400">
+                              <Icons.Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+                              Mengira data...
+                            </td>
+                          </tr>
+                        ) : (
+                          <>
+                            {reportData.map((item, index) => (
+                              <tr key={index} className="hover:bg-slate-50 transition-colors">
+                                <td className="p-4 text-center font-mono text-xs text-slate-400">{index + 1}</td>
+                                <td className="p-4 font-bold text-slate-700">{item.nama}</td>
+                                <td className="p-4 text-center font-bold text-blue-900 bg-blue-50/50">{item.total}</td>
+                                <td className="p-4 text-center font-bold text-green-600">{item.aktif}</td>
+                                <td className="p-4 text-center font-bold text-red-500 bg-red-50/50">{item.tidakAktif}</td>
+                              </tr>
+                            ))}
+                            {/* BARIS JUMLAH BESAR */}
+                            <tr className="bg-slate-800 text-white font-bold border-t-2 border-slate-900">
+                              <td colSpan="2" className="p-4 text-right uppercase text-xs tracking-widest">Jumlah Besar</td>
+                              <td className="p-4 text-center text-lg">{reportData.reduce((a, b) => a + b.total, 0)}</td>
+                              <td className="p-4 text-center text-lg text-green-300">{reportData.reduce((a, b) => a + b.aktif, 0)}</td>
+                              <td className="p-4 text-center text-lg text-red-300">{reportData.reduce((a, b) => a + b.tidakAktif, 0)}</td>
+                            </tr>
+                          </>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="p-4 bg-slate-50 text-xs text-slate-400 text-center border-t border-slate-200">
+                    Laporan dijana pada: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+         </div>
+      </div>
+
+      {/* --- MODAL ADMIN: SEMAKAN PERMOHONAN (FULL GLASS OVERLAY) --- */}
+      {selectedAdminApp && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
+          <div className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-2xl max-w-4xl w-full flex flex-col max-h-[90vh] overflow-hidden border border-white/50">
+            
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900/90 to-slate-800/90 backdrop-blur-xl p-5 text-white flex justify-between items-center shadow-md shrink-0 border-b border-white/10">
+               <div>
+                  <h3 className="font-bold text-xl flex items-center text-white"><Icons.FileText className="w-5 h-5 mr-3 text-blue-400"/> Semakan Permohonan</h3>
+                  <p className="text-xs text-slate-400 font-mono mt-1 ml-8">{selectedAdminApp.appId}</p>
+               </div>
+               <button onClick={() => setSelectedAdminApp(null)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 text-white transition-colors"><Icons.X className="w-6 h-6"/></button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-8 overflow-y-auto custom-scrollbar flex-grow bg-slate-50/30">
+               <div className="flex justify-between items-center bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white/60 shadow-sm mb-6">
+                  <div>
+                     <p className="text-xs text-slate-500 font-bold uppercase mb-1">Status Semasa</p>
+                     <span className={`px-3 py-1 rounded-full text-sm font-extrabold border ${selectedAdminApp.status === "Lulus" || selectedAdminApp.status === "Berjaya" ? "bg-green-100/50 text-green-800 border-green-200/50" : "bg-blue-100/50 text-blue-800 border-blue-200/50"}`}>{selectedAdminApp.status}</span>
+                  </div>
+                  <div className="text-right">
+                     <p className="text-xs text-slate-500 font-bold uppercase mb-1">Tarikh Mohon</p>
+                     <p className="font-mono font-bold text-slate-700">{selectedAdminApp.dateTime}</p>
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl border border-white/60 shadow-sm hover:bg-white/80 transition-colors">
+                     <h4 className="font-bold text-blue-800 border-b border-blue-100 pb-2 mb-4 flex items-center"><Icons.Home className="w-4 h-4 mr-2"/> Aset</h4>
+                     <div className="space-y-3 text-sm">
+                        <div><label className="text-xs font-bold text-slate-400 block">Nama/Lokasi</label><p className="font-bold text-slate-800">{selectedAdminApp.lokasi}</p></div>
+                        <div className="grid grid-cols-2">
+                           <div><label className="text-xs font-bold text-slate-400 block">Jenis</label><p>{selectedAdminApp.jenis}</p></div>
+                           <div><label className="text-xs font-bold text-slate-400 block">Harga Asal</label><p className="font-bold text-blue-600">RM {selectedAdminApp.hargaAsal || "0"}</p></div>
+                        </div>
+                     </div>
+                  </div>
+                  <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl border border-white/60 shadow-sm hover:bg-white/80 transition-colors">
+                     <h4 className="font-bold text-purple-800 border-b border-purple-100 pb-2 mb-4 flex items-center"><Icons.User className="w-4 h-4 mr-2"/> Pemohon</h4>
+                     <div className="space-y-3 text-sm">
+                        <div><label className="text-xs font-bold text-slate-400 block">Nama</label><p className="font-bold text-slate-800">{selectedAdminApp.nama}</p></div>
+                        <div className="grid grid-cols-2">
+                           <div><label className="text-xs font-bold text-slate-400 block">IC</label><p className="font-mono">{selectedAdminApp.ic}</p></div>
+                           <div><label className="text-xs font-bold text-slate-400 block">Telefon</label><p className="font-mono">{selectedAdminApp.phone}</p></div>
+                        </div>
+                        <div><label className="text-xs font-bold text-slate-400 block">Pendapatan</label><p className="font-bold text-green-600">RM {selectedAdminApp.pendapatan}</p></div>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="bg-white/60 backdrop-blur-md p-5 rounded-2xl border border-white/60 shadow-sm mb-6">
+                  <h4 className="font-bold text-slate-700 text-sm uppercase mb-2">Tujuan Sewaan</h4>
+                  <div className="bg-yellow-50/50 p-4 rounded-xl border border-yellow-100 text-slate-700 italic text-sm">"{selectedAdminApp.tujuan}"</div>
+               </div>
+
+               {/* SEJARAH ULASAN */}
+               {(selectedAdminApp.ulasanStaff || selectedAdminApp.ulasanAdmin) && (
+                  <div className="bg-slate-100/50 backdrop-blur-md p-5 rounded-2xl border border-slate-200/50 mb-6">
+                     <h4 className="font-bold text-slate-700 mb-3 text-sm">Rekod Keputusan</h4>
+                     {selectedAdminApp.ulasanStaff && <div className="bg-white/80 p-3 rounded-xl border-l-4 border-blue-500 shadow-sm mb-2"><span className="text-xs font-bold text-blue-600 block">STAFF</span><p className="text-sm">{selectedAdminApp.ulasanStaff}</p></div>}
+                     {selectedAdminApp.ulasanAdmin && <div className="bg-white/80 p-3 rounded-xl border-l-4 border-purple-500 shadow-sm"><span className="text-xs font-bold text-purple-600 block">ADMIN</span><p className="text-sm">{selectedAdminApp.ulasanAdmin}</p></div>}
+                  </div>
+               )}
+
+               {/* ACTION FORM */}
+               <div className="bg-indigo-50/60 backdrop-blur-md border border-indigo-100 p-6 rounded-2xl">
+                  <h4 className="font-bold text-indigo-900 mb-4 text-lg">Tindakan ({user.role.toUpperCase()})</h4>
+                  <form onSubmit={(e) => {
+                     e.preventDefault();
+                     const action = e.nativeEvent.submitter.value;
+                     handleProcessApp(action, {
+                        staffName: user.nama,
+                        userRole: user.role,
+                        harga: e.target.harga ? e.target.harga.value : selectedAdminApp.hargaFinal || selectedAdminApp.hargaAsal,
+                        ulasanStaff: e.target.ulasanStaff ? e.target.ulasanStaff.value : "",
+                        ulasanAdmin: e.target.ulasanAdmin ? e.target.ulasanAdmin.value : ""
+                     });
+                  }}>
+                     {user.role === 'staff' && selectedAdminApp.status === 'Dalam Proses' ? (
+                        <div className="space-y-4">
+                           <div><label className="text-xs font-bold uppercase text-slate-500">Cadangan Harga (RM)</label><input name="harga" type="number" defaultValue={selectedAdminApp.hargaAsal} className="w-full p-3 rounded-xl bg-white/70 border border-indigo-200 font-bold text-indigo-900"/></div>
+                           <div><label className="text-xs font-bold uppercase text-slate-500">Ulasan</label><textarea name="ulasanStaff" required rows="2" className="w-full p-3 rounded-xl bg-white/70 border border-indigo-200"></textarea></div>
+                           <button type="submit" value="sokong" className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-transform hover:scale-105">HANTAR SOKONGAN</button>
+                        </div>
+                     ) : (user.role === 'admin' || user.role === 'approver') && (user.role === 'admin' || ["Dalam Proses", "Disokong"].includes(selectedAdminApp.status)) ? (
+                        <div className="space-y-4">
+                           {selectedAdminApp.hargaFinal && <div className="bg-blue-100/50 p-2 rounded-xl text-blue-800 text-sm font-bold text-center border border-blue-200">Cadangan Staff: RM {selectedAdminApp.hargaFinal}</div>}
+                           <div><label className="text-xs font-bold uppercase text-slate-500">Ulasan Keputusan</label><textarea name="ulasanAdmin" required rows="2" className="w-full p-3 rounded-xl bg-white/70 border border-indigo-200"></textarea></div>
+                           <div className="grid grid-cols-1 gap-3">
+                              {![ "Lulus", "Menunggu Persetujuan", "Berjaya" ].includes(selectedAdminApp.status) && <button type="submit" value="lulus" className="w-full bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-green-700 transition-transform hover:scale-105">LULUSKAN</button>}
+                              {!["Ditolak", "Dibatalkan"].includes(selectedAdminApp.status) && <button type="submit" value="tolak" className="w-full bg-red-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-red-700 transition-transform hover:scale-105">TOLAK</button>}
+                           </div>
+                        </div>
+                     ) : (
+                        <div className="text-center p-4 bg-white/50 rounded-xl border border-slate-200 text-slate-500 italic">Tiada tindakan diperlukan atau anda tidak mempunyai akses.</div>
+                     )}
+                  </form>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+</script>

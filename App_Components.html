@@ -1,0 +1,377 @@
+<script type="text/babel">
+  const { useState, useEffect } = React;
+
+  // --- HELPER: CONVERT DRIVE URL UNTUK PAPARAN STABIL ---
+  const getDriveImageUrl = (url) => {
+    if (!url) return "";
+    if (
+      url.includes("drive.google.com") &&
+      (url.includes("uc?") || url.includes("export=view"))
+    ) {
+      const match = url.match(/id=([^&]+)/);
+      if (match && match[1]) {
+        return `https://drive.google.com/thumbnail?id=${match[1]}&sz=s3000`;
+      }
+    }
+    return url;
+  };
+
+  // --- HERO CAROUSEL (HYBRID: LOOP JIKA ADA DATA, STATIC JIKA TIADA) ---
+  const HeroCarousel = ({ banners }) => {
+    const [current, setCurrent] = useState(0);
+
+    // 1. DATA DEFAULT (Welcome Slide - Dipapar jika tiada banner dalam DB)
+    const defaultSlides = [
+      {
+        image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1600&q=80", 
+        title: "Selamat Datang ke e-Sewaan Aset LKIM",
+        subtitle: "Platform digital rasmi untuk permohonan sewaan aset dan kuarters. Memudahkan urusan anda dihujung jari.",
+      }
+    ];
+
+    // 2. Tentukan slide mana nak guna (DB atau Default)
+    const slides = (banners && banners.length > 0) ? banners : defaultSlides;
+    const hasMultipleSlides = slides.length > 1;
+
+    // 3. Logik Auto-Play (Hanya jalan jika ada lebih dari 1 slide)
+    useEffect(() => {
+      if (!hasMultipleSlides) return; 
+
+      const timer = setInterval(() => {
+        setCurrent((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+      }, 6000); // Tukar slide setiap 6 saat
+      return () => clearInterval(timer);
+    }, [slides, hasMultipleSlides]);
+
+    const prevSlide = () => setCurrent(current === 0 ? slides.length - 1 : current - 1);
+    const nextSlide = () => setCurrent(current === slides.length - 1 ? 0 : current + 1);
+
+    // Helper url gambar
+    const getBgImage = (item) => {
+        return typeof getDriveImageUrl === 'function' ? getDriveImageUrl(item.image || item.url) : item.image;
+    };
+
+    return (
+      <div className="relative h-[300px] w-full overflow-hidden rounded-2xl shadow-2xl mb-10 group border-4 border-white bg-slate-900">
+        
+        {/* LOOP SLIDES */}
+        {slides.map((slide, index) => (
+          <div
+            key={index}
+            className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+              index === current ? "opacity-100 z-10" : "opacity-0 z-0"
+            }`}
+          >
+            {/* Imej Background (Ken Burns Effect hanya pada slide aktif) */}
+            <div className={`absolute inset-0 ${index === current ? "animate-[kenburns_20s_infinite_alternate]" : ""}`}>
+              <img
+                src={getBgImage(slide)}
+                alt={slide.title}
+                className="w-full h-full object-cover opacity-90"
+              />
+            </div>
+
+            {/* Overlay Gelap (Supaya tulisan jelas) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-blue-900/90 via-blue-900/40 to-transparent"></div>
+
+            {/* Kandungan Teks */}
+            <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-8">
+              {/* Ikon Hiasan (Hanya muncul untuk slide pertama atau default) */}
+              <div className={`bg-orange-500 p-3 rounded-full mb-4 shadow-lg transition-transform duration-700 ${index === current ? "scale-100" : "scale-0"}`}>
+                 <Icons.Anchor className="w-8 h-8 text-blue-900" />
+              </div>
+
+              <h1 className={`text-3xl md:text-5xl font-extrabold text-white mb-3 drop-shadow-lg tracking-tight font-serif transition-all duration-700 delay-100 ${index === current ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+                {slide.title}
+              </h1>
+              
+              <p className={`text-lg md:text-xl text-yellow-100 max-w-2xl font-light leading-relaxed drop-shadow-md transition-all duration-700 delay-200 ${index === current ? "translate-y-0 opacity-100" : "translate-y-10 opacity-0"}`}>
+                {slide.subtitle}
+              </p>
+
+              {/* Garisan Hiasan */}
+              <div className={`mt-6 w-20 h-1.5 bg-orange-500 rounded-full transition-all duration-700 delay-300 ${index === current ? "w-24 opacity-100" : "w-0 opacity-0"}`}></div>
+            </div>
+          </div>
+        ))}
+
+        {/* Butang Navigasi (Hanya tunjuk jika slide > 1) */}
+        {hasMultipleSlides && (
+            <>
+                <button onClick={prevSlide} className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white/10 hover:bg-orange-500 hover:text-blue-900 text-white p-3 rounded-full backdrop-blur-sm transition-all duration-300 shadow-lg border border-white/20 group-hover:opacity-100 opacity-0">
+                <Icons.ChevronLeft className="h-6 w-6" />
+                </button>
+                <button onClick={nextSlide} className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white/10 hover:bg-orange-500 hover:text-blue-900 text-white p-3 rounded-full backdrop-blur-sm transition-all duration-300 shadow-lg border border-white/20 group-hover:opacity-100 opacity-0">
+                <Icons.ChevronRight className="h-6 w-6" />
+                </button>
+                
+                {/* Indikator Titik (Dots) */}
+                <div className="absolute bottom-6 left-0 right-0 z-20 flex justify-center space-x-2">
+                    {slides.map((_, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => setCurrent(idx)}
+                            className={`h-2 rounded-full transition-all duration-300 ${current === idx ? "w-8 bg-orange-500" : "w-2 bg-white/50 hover:bg-white"}`}
+                        />
+                    ))}
+                </div>
+            </>
+        )}
+      </div>
+    );
+  };
+
+  // --- KOMPONEN KALENDAR KEKOSONGAN ---
+const AvailabilityCalendar = ({ assetName, onClose }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [bookedRanges, setBookedRanges] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Tarik data kekosongan dari server bila komponen dibuka
+  useEffect(() => {
+    if (assetName) {
+      setLoading(true);
+      google.script.run
+        .withSuccessHandler((dates) => {
+          setBookedRanges(dates || []);
+          setLoading(false);
+        })
+        .getAssetOccupancy(assetName);
+    }
+  }, [assetName]);
+
+  // Helper: Kira hari dalam bulan
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
+
+  // Helper: Cek status hari (Penuh/Kosong)
+  const checkStatus = (day) => {
+    const checkTime = new Date(currentDate.getFullYear(), currentDate.getMonth(), day).getTime();
+    
+    // Semak jika hari ini bertindih dengan mana-mana range booking
+    const isBooked = bookedRanges.some(range => checkTime >= range.start && checkTime <= range.end);
+    return isBooked ? 'booked' : 'free';
+  };
+
+  const changeMonth = (offset) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + offset, 1));
+  };
+
+  const monthNames = ["Januari", "Februari", "Mac", "April", "Mei", "Jun", "Julai", "Ogos", "September", "Oktober", "November", "Disember"];
+  const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
+  const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
+  const blanks = Array(firstDay).fill(null);
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        
+        {/* Header Kalendar */}
+        <div className="bg-blue-900 p-4 text-white flex justify-between items-center border-b-4 border-yellow-400">
+          <div>
+            <h3 className="font-bold text-lg">Semakan Kekosongan</h3>
+            <p className="text-xs text-blue-200 truncate max-w-[200px]">{assetName}</p>
+          </div>
+          <button onClick={onClose} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors"><Icons.X className="w-5 h-5"/></button>
+        </div>
+
+        <div className="p-6">
+          {loading ? (
+             <div className="h-64 flex flex-col items-center justify-center text-slate-400">
+               <Icons.Loader className="w-8 h-8 animate-spin mb-2 text-blue-600"/>
+               <span className="text-sm">Menyemak jadual...</span>
+             </div>
+          ) : (
+            <>
+              {/* Navigasi Bulan */}
+              <div className="flex justify-between items-center mb-6">
+                <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-100 rounded-full"><Icons.ChevronLeft className="w-5 h-5 text-slate-600"/></button>
+                <h4 className="font-bold text-xl text-slate-800">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h4>
+                <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-100 rounded-full"><Icons.ChevronRight className="w-5 h-5 text-slate-600"/></button>
+              </div>
+
+              {/* Grid Hari */}
+              <div className="grid grid-cols-7 gap-2 mb-2 text-center">
+                {['Ahd','Isn','Sel','Rab','Kha','Jum','Sab'].map(d => (
+                  <div key={d} className="text-xs font-bold text-slate-400 uppercase">{d}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {blanks.map((_, i) => <div key={`blank-${i}`} className="h-10"></div>)}
+                {days.map(day => {
+                  const status = checkStatus(day);
+                  return (
+                    <div 
+                      key={day} 
+                      className={`h-10 flex items-center justify-center rounded-lg text-sm font-bold border transition-all ${
+                        status === 'booked' 
+                          ? 'bg-red-100 text-red-600 border-red-200 cursor-not-allowed' 
+                          : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100 cursor-pointer'
+                      }`}
+                      title={status === 'booked' ? "Telah ditempah" : "Kosong"}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Petunjuk */}
+              <div className="flex justify-center space-x-4 mt-6 text-xs font-bold">
+                <div className="flex items-center"><span className="w-3 h-3 bg-green-100 border border-green-300 rounded mr-2"></span> Masih Kosong</div>
+                <div className="flex items-center"><span className="w-3 h-3 bg-red-100 border border-red-300 rounded mr-2"></span> Telah Penuh</div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- FOOTER GLASSMORPHISM (CLEAN LOGO) ---
+  const Footer = ({ visitorCount, setView, user, settings }) => {
+
+    // 1. DATA DARI DATABASE (SETTINGS)
+    const phone = settings?.phone || "03-8888 1234";
+    const email = settings?.email || "aset@lkim.gov.my";
+    const addr = settings?.address || "Aras 5, Menara LKIM, Putrajaya";
+    
+    // Data Dinamik
+    const siteName = settings?.title || "Portal Sewaan Aset";
+    const siteDesc = settings?.subtitle;
+    
+    // Helper Logo
+    const getLogoUrl = (url) => {
+        if (!url) return null;
+        if (typeof getDriveImageUrl === 'function') return getDriveImageUrl(url);
+        if (url.includes("drive.google.com") && url.includes("id=")) {
+            const match = url.match(/id=([^&]+)/);
+            if (match) return "https://drive.google.com/thumbnail?id=" + match[1] + "&sz=s200";
+        }
+        return url;
+    };
+    
+    const logoUrl = getLogoUrl(settings?.logo);
+
+    return (
+      <footer className="relative mt-24 pt-16 pb-8 overflow-hidden">
+        
+        {/* Latar Belakang Kaca Gelap */}
+        <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.4)]"></div>
+
+        {/* Efek Glow Halus */}
+        <div className="absolute top-0 left-0 w-1/3 h-[1px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent"></div>
+        <div className="absolute top-0 right-0 w-1/3 h-[1px] bg-gradient-to-r from-transparent via-orange-500/30 to-transparent"></div>
+        
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+            
+            {/* KOLUM 1: INFO & LOGO (SOLID) */}
+            <div className="space-y-6">
+              <div className="flex items-center space-x-4">
+                 {/* LOGO TANPA BACKGROUND (SOLID) */}
+                 <div className="flex-shrink-0">
+                    {logoUrl ? (
+                      <img 
+                        src={logoUrl} 
+                        className="w-12 h-12 object-contain filter drop-shadow-lg" 
+                        alt="Logo" 
+                        onError={(e) => {e.target.style.display='none'; e.target.parentElement.innerHTML='<svg class="w-10 h-10 text-white drop-shadow-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l8-4 8 4v14M8 21v-8a2 2 0 012-2h4a2 2 0 012 2v8"/></svg>'}}
+                      />
+                    ) : (
+                      // Fallback Ikon Besar Sikit
+                      <Icons.Building className="w-10 h-10 text-white drop-shadow-md" />
+                    )}
+                 </div>
+                 
+                 {/* Nama Sistem */}
+                 <div className="flex flex-col justify-center border-l-2 border-slate-200 pl-4">
+                    {/* Label Kecil di atas (Contoh: PORTAL RASMI) */}
+                    <span className="text-[10px] font-medium text-blue-600 tracking-widest uppercase leading-none mb-1">
+                      Portal Rasmi
+                    </span>
+
+                    {/* Tajuk Utama (Contoh: LEMBAGA KEMAJUAN IKAN MALAYSIA) */}
+                    <h3 className="text-2xl font-black tracking-tighter text-[#FFFFFF] font-sans leading-[0.9] uppercase transition-colors group-hover:text-blue-800">
+                      {siteName}
+                    </h3>
+
+                    {/* Sub-tajuk (Contoh: Kementerian Pertanian...) */}
+                    <p className="text-[11px] font-semibold text-slate-400 tracking-normal mt-1 leading-tight capitalize">
+                      {siteDesc}
+                    </p>
+                  </div>
+              </div>
+
+              {/* Deskripsi */}
+              <p className="text-sm leading-relaxed text-slate-400 font-light max-w-sm border-l-2 border-slate-600 pl-4">
+              Sistem pengurusan sewaan aset kerajaan yang efisien dan telus.
+              </p>
+            </div>
+            
+            {/* KOLUM 2: HUBUNGI KAMI */}
+            <div className="space-y-5">
+              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">Hubungi Kami</h3>
+              <div className="space-y-4 text-sm">
+                
+                <div className="flex items-start group">
+                   <Icons.Phone className="w-5 h-5 text-slate-500 mr-3 mt-0.5 group-hover:text-blue-400 transition-colors" />
+                   <div className="text-slate-300 font-medium">{phone}</div>
+                </div>
+
+                <div className="flex items-start group">
+                   <Icons.Mail className="w-5 h-5 text-slate-500 mr-3 mt-0.5 group-hover:text-orange-400 transition-colors" />
+                   <a href={`mailto:${email}`} className="text-slate-300 hover:text-white transition-colors">{email}</a>
+                </div>
+
+                <div className="flex items-start group">
+                   <Icons.MapPin className="w-5 h-5 text-slate-500 mr-3 mt-0.5 group-hover:text-green-400 transition-colors" />
+                   <span className="text-slate-300 whitespace-pre-line leading-snug">{addr}</span>
+                </div>
+
+              </div>
+            </div>
+
+            {/* KOLUM 3: PAUTAN */}
+            <div className="space-y-5">
+              <h3 className="text-sm font-bold text-orange-400 uppercase tracking-widest mb-4">Pautan Pantas</h3>
+              <ul className="space-y-3 text-sm">
+                <li>
+                  <button onClick={() => setView("home")} className="flex items-center text-slate-400 hover:text-white transition-all duration-200 hover:translate-x-1">
+                    <Icons.ChevronRight className="w-4 h-4 mr-2 text-slate-600" /> Dashboard Utama
+                  </button>
+                </li>
+                {!user && (
+                  <li>
+                    <button onClick={() => setView("login")} className="flex items-center text-slate-400 hover:text-white transition-all duration-200 hover:translate-x-1">
+                      <Icons.ChevronRight className="w-4 h-4 mr-2 text-slate-600" /> Log Masuk Kakitangan
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+          </div>
+
+          {/* FOOTER BAWAH */}
+          <div className="border-t border-white/5 pt-8 flex flex-col md:flex-row justify-between items-center text-xs text-slate-500">
+            <div className="mb-4 md:mb-0">
+              © {new Date().getFullYear()} {siteName}. Hak Cipta Terpelihara.
+            </div>
+
+            <div className="flex items-center bg-black/30 px-4 py-1.5 rounded-full border border-white/5 backdrop-blur-md">
+              <div className="flex items-center mr-3 border-r border-white/10 pr-3">
+                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse mr-2"></span>
+                 <span className="text-slate-300 font-bold">LIVE</span>
+              </div>
+              <span className="text-slate-400 mr-2">Pelawat:</span>
+              <span className="font-mono text-white font-bold">{visitorCount ? visitorCount.toLocaleString() : "..."}</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    );
+  };
+</script>
