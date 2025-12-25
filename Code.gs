@@ -374,7 +374,8 @@ function getAllApplications() {
         hargaAsal: data[i][20] || "0",
         userAction: data[i][21] || "",
         userTime: data[i][22] || "",
-        userNote: data[i][23] || ""
+        userNote: data[i][23] || "",
+        signLink: data[i][25] || ""
       });
     }
   }
@@ -520,8 +521,6 @@ function submitUserDecision(data) {
     }
 
     try {
-      // 2. Jana PDF Perjanjian (Internal Function)
-      // Kita guna logik sama macam saveSignedAgreement tapi terus di sini
       var contentType = 'application/pdf';
       var cleanBase64 = data.signature.split(',')[1];
       var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), contentType, "Perjanjian_" + data.appId + ".pdf");
@@ -529,8 +528,8 @@ function submitUserDecision(data) {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       var fileUrl = file.getUrl();
 
-      // 3. Simpan Link PDF dalam nota
-      finalNote += "\n[AGREEMENT_LINK::" + fileUrl + "]";
+      // 3. Simpan Link PDF
+      appSheet.getRange(rowIndex, 26).setValue(fileUrl);
       
       newStatus = "Berjaya";
       userActionText = "BERSETUJU (TANDATANGAN DIREKOD)";
@@ -555,7 +554,7 @@ function submitUserDecision(data) {
   appSheet.getRange(rowIndex, 16).setValue(newStatus);     // Status
   appSheet.getRange(rowIndex, 22).setValue(userActionText); // User Action
   appSheet.getRange(rowIndex, 23).setValue(timestamp);      // Time
-  appSheet.getRange(rowIndex, 24).setValue(finalNote);      // Note (with PDF Link)
+  appSheet.getRange(rowIndex, 24).setValue(finalNote);      // Note
   appSheet.getRange(rowIndex, 25).setValue(endDate);        // End Date
 
   return { success: true, message: "Tindakan berjaya. Status kini: " + newStatus };
@@ -1463,9 +1462,7 @@ function saveSignedAgreement(appId, base64Pdf) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     var fileUrl = file.getUrl();
     
-    var currentNoteCell = sheet.getRange(rowIndex, 26); 
-    var currentNote = currentNoteCell.getValue();
-    var newNote = currentNote + "\n[AGREEMENT SIGNED]: " + fileUrl;
+    sheet.getRange(rowIndex, 26).setValue(fileUrl);
     
     currentNoteCell.setValue(newNote);
 
