@@ -19,16 +19,19 @@
   // ============================================================================
   // 1. KOMPONEN CARTA (UI GLASS)
   // ============================================================================
+
   const DashboardCharts = ({ apps, stats }) => {
     if (!BarChart || !PieChart) return null;
     if (!apps || !stats) return null;
 
+    // Data Pie Chart Status
     const pieData = [
       { name: 'Lulus / Berjaya', value: stats.lulus },
       { name: 'Dalam Proses', value: stats.dalamProses },
       { name: 'Ditolak', value: stats.ditolak },
     ].filter(d => d.value > 0);
 
+    // Data Trend Bulanan
     const processMonthlyData = () => {
       const monthlyCounts = {};
       const months = ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"];
@@ -49,72 +52,112 @@
     const barData = processMonthlyData();
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 animate-fade-in">
+      <div className="space-y-6 animate-fade-in mb-8">
         
-        {/* CARTA 1: BAR CHART (GLASS) */}
-        <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-blue-900/10 transition-all">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-          <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-            <div className="p-2 bg-blue-100/50 backdrop-blur-md rounded-xl mr-3 text-blue-700 shadow-sm border border-blue-200/30">
-               <Icons.BarChart2 className="w-5 h-5"/>
-            </div>
-            Trend Permohonan Bulanan
-          </h3>
-          <div className="h-64 w-full text-xs relative z-10">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(203, 213, 225, 0.5)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{fill: '#475569'}} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.8)', boxShadow: '0 10px 30px rgba(0,0,0,0.1)', backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }}
-                  cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
-                />
-                <Bar dataKey="Jumlah" fill="url(#colorBar)" radius={[6, 6, 0, 0]} barSize={24} />
-                <defs>
-                  <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.9}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.4}/>
-                  </linearGradient>
-                </defs>
-              </BarChart>
-            </ResponsiveContainer>
+        {/* BARIS 1: Trend & Status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          {/* CARTA TREND PERMOHONAN */}
+          <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-blue-900/10 transition-all">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+             <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+                <div className="p-2 bg-blue-100/50 backdrop-blur-md rounded-xl mr-3 text-blue-700 shadow-sm">
+                   <Icons.BarChart2 className="w-5 h-5"/>
+                </div>
+                Trend Permohonan Bulanan
+             </h3>
+             <div className="h-64 w-full text-xs relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(203, 213, 225, 0.5)" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold'}} />
+                    <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{fill: '#475569'}} />
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} />
+                    <Bar dataKey="Jumlah" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+             </div>
+          </div>
+
+          {/* CARTA PECAHAN STATUS */}
+          <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-orange-500/10 transition-all">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+             <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+                <div className="p-2 bg-orange-100/50 backdrop-blur-md rounded-xl mr-3 text-orange-600 shadow-sm">
+                   <Icons.PieChart className="w-5 h-5"/>
+                </div>
+                Pecahan Status Keseluruhan
+             </h3>
+             <div className="h-64 w-full flex items-center justify-center text-xs relative z-10">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle"/>
+                  </PieChart>
+                </ResponsiveContainer>
+             </div>
           </div>
         </div>
 
-        {/* CARTA 2: PIE CHART (GLASS) */}
-        <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-orange-500/10 transition-all">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-          <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-            <div className="p-2 bg-orange-100/50 backdrop-blur-md rounded-xl mr-3 text-orange-600 shadow-sm border border-orange-200/30">
-               <Icons.PieChart className="w-5 h-5"/>
+        {/* BARIS 2: KUTIPAN & ASET POPULAR (STATISTIK BARU) */}
+        {stats.revenueArray && stats.topAssetsArray && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* CARTA KUTIPAN MENGIKUT KATEGORI */}
+            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-green-500/10 transition-all">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+               <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+                  <div className="p-2 bg-green-100/50 backdrop-blur-md rounded-xl mr-3 text-green-600 shadow-sm">
+                     <Icons.DollarSign className="w-5 h-5"/>
+                  </div>
+                  Prestasi Kutipan (RM)
+               </h3>
+               <div className="h-64 w-full text-xs relative z-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.revenueArray} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(203, 213, 225, 0.5)" />
+                      <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(val) => `RM${val/1000}k`} tick={{fill: '#475569'}} />
+                      <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold', fontSize: 10}} />
+                      <Tooltip formatter={(value) => `RM ${value.toLocaleString()}`} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} cursor={{ fill: 'rgba(34, 197, 94, 0.1)' }} />
+                      <Bar dataKey="nilai" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+               </div>
             </div>
-            Pecahan Status
-          </h3>
-          <div className="h-64 w-full flex items-center justify-center text-xs relative z-10">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
-                  paddingAngle={6}
-                  dataKey="value"
-                  stroke="none"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: '16px', border: '1px solid rgba(255,255,255,0.8)', backgroundColor: 'rgba(255, 255, 255, 0.8)', backdropFilter: 'blur(10px)' }} />
-                <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
 
+            {/* CARTA 5 ASET PALING POPULAR */}
+            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-purple-500/10 transition-all">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+               <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
+                  <div className="p-2 bg-purple-100/50 backdrop-blur-md rounded-xl mr-3 text-purple-600 shadow-sm">
+                     <Icons.TrendingUp className="w-5 h-5"/>
+                  </div>
+                  Top 5 Aset Paling Diminati
+               </h3>
+               <div className="h-64 w-full text-xs relative z-10">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats.topAssetsArray} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(203, 213, 225, 0.5)" />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={110} axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold', fontSize: 10}} />
+                      <Tooltip cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                      <Bar dataKey="jumlah" fill="#8b5cf6" radius={[0, 6, 6, 0]} barSize={20}>
+                        {stats.topAssetsArray.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+               </div>
+            </div>
+
+          </div>
+        )}
       </div>
     );
   };

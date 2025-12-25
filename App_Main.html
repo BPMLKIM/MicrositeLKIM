@@ -2526,6 +2526,41 @@
                             </p>
                           </div>
                         </div>
+                        
+                        {/* --- TAMBAHAN BARU: BUTANG LIHAT DRAF --- */}
+                        <div className="mb-4">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setToast({ message: "Sedang memuatkan draf...", type: "info" });
+                                    google.script.run
+                                    .withSuccessHandler((res) => {
+                                        if (res.success) {
+                                            const win = window.open("", "Draf Perjanjian", "width=850,height=800,scrollbars=yes");
+                                            if (win) {
+                                                win.document.write("<html><head><title>Draf Perjanjian</title></head><body>");
+                                                win.document.write(res.html);
+                                                win.document.write("</body></html>");
+                                                win.document.close();
+                                            } else {
+                                                alert("Sila benarkan 'Pop-up' untuk melihat draf.");
+                                            }
+                                            setToast({ message: "Draf dibuka di tetingkap baru.", type: "success" });
+                                        } else {
+                                            alert(res.message);
+                                        }
+                                    })
+                                    .getOfferLetterContent(viewHistoryDetail.appId);
+                                }}
+                                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm flex justify-center items-center transition-all"
+                            >
+                                <Icons.Eye className="w-5 h-5 mr-2" /> BACA DRAF PERJANJIAN DAHULU
+                            </button>
+                            <p className="text-[10px] text-center text-slate-500 mt-2 italic">
+                                *Sila baca draf perjanjian di atas sebelum menurunkan tandatangan.
+                            </p>
+                        </div>
+                        {/* ---------------------------------------- */}
 
                         {/* 1. KOTAK TANDATANGAN */}
                         <div className="bg-white p-4 rounded-xl border border-slate-200 mb-5">

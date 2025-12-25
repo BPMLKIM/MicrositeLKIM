@@ -484,24 +484,28 @@ function getUserHistory(email) {
         hargaAsal: data[i][20] || "0",
         userAction: data[i][21] || "",
         userTime: data[i][22] || "",
-        userNote: data[i][23] || ""
+        userNote: data[i][23] || "",
+        signLink: data[i][25] || ""
       });
     }
   }
   return history;
 }
 
-// FUNGSI USER: TERIMA/TOLAK
+// FUNGSI USER: TERIMA/TOLAK (DIKEMASKINI: JANA PDF LENGKAP)
 function submitUserDecision(data) {
   var ss = getDb();
   var appSheet = ss.getSheetByName('Applications');
   var appData = appSheet.getDataRange().getDisplayValues();
 
   var rowIndex = -1;
+  var rowData = null;
+
   // Cari row berdasarkan App ID
   for (var i = 0; i < appData.length; i++) {
     if (appData[i][0] == data.appId) {
       rowIndex = i + 1;
+      rowData = appData[i]; // Simpan data row untuk kegunaan template
       break;
     }
   }
@@ -512,7 +516,7 @@ function submitUserDecision(data) {
   var userActionText = "";
   var finalNote = data.note || "-";
 
-  // --- LOGIK BARU: JANA AGREEMENT JIKA TERIMA ---
+  // --- LOGIK BARU: JANA AGREEMENT PDF JIKA TERIMA ---
   if (data.action === 'terima') {
     
     // 1. Validasi: Mesti ada tandatangan
@@ -521,21 +525,85 @@ function submitUserDecision(data) {
     }
 
     try {
-      var contentType = 'application/pdf';
-      var cleanBase64 = data.signature.split(',')[1];
-      var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), contentType, "Perjanjian_" + data.appId + ".pdf");
+      // A. Ambil butiran dari sheet untuk dimasukkan ke dalam PDF
+      var info = {
+        nama: rowData[3],
+        ic: rowData[4],
+        alamat: rowData[7],
+        lokasi: rowData[10],
+        tempoh: rowData[13],
+        harga: rowData[16] || rowData[20], // Harga Lulus atau Harga Asal
+        tarikh: formatDateDMY(new Date())
+      };
+
+      // B. Sediakan Template HTML Perjanjian (Boleh ubah ayat ikut kesesuaian)
+      var htmlAgreement = `
+        <div style="font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; color: #333;">
+          <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
+            <h2 style="margin: 0;">LEMBAGA KEMAJUAN IKAN MALAYSIA</h2>
+            <p style="margin: 0; font-size: 12px;">PERJANJIAN PENYEWAAN ASET</p>
+          </div>
+
+          <p>PERJANJIAN INI dibuat pada <strong>${info.tarikh}</strong> antara <strong>LEMBAGA KEMAJUAN IKAN MALAYSIA (LKIM)</strong> dan:</p>
+          
+          <table style="width: 100%; margin-bottom: 20px;">
+            <tr><td width="150"><strong>Nama Penyewa</strong></td><td>: ${info.nama}</td></tr>
+            <tr><td><strong>No. Kad Pengenalan</strong></td><td>: ${info.ic}</td></tr>
+            <tr><td><strong>Alamat</strong></td><td>: ${info.alamat}</td></tr>
+          </table>
+
+          <p>Penyewa dengan ini bersetuju untuk menyewa aset berikut tertakluk kepada syarat-syarat yang ditetapkan:</p>
+
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <tr style="background-color: #f0f0f0;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Lokasi Aset</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${info.lokasi}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Tempoh Sewaan</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">${info.tempoh}</td>
+            </tr>
+            <tr style="background-color: #f0f0f0;">
+              <td style="padding: 10px; border: 1px solid #ddd;"><strong>Kadar Sewaan</strong></td>
+              <td style="padding: 10px; border: 1px solid #ddd;">RM ${info.harga} / Bulan</td>
+            </tr>
+          </table>
+
+          <h3>PENGAKUAN PENYEWA:</h3>
+          <p>Saya dengan ini mengaku bahawa segala maklumat yang diberikan adalah benar dan saya bersetuju mematuhi segala syarat penyewaan yang ditetapkan oleh LKIM.</p>
+          
+          <br><br>
+          
+          <div style="margin-top: 20px;">
+            <p><strong>Tandatangan Penyewa:</strong></p>
+            <img src="${data.signature}" style="width: 200px; height: auto; border-bottom: 1px solid #000;" />
+            <p>Tarikh: ${info.tarikh}</p>
+          </div>
+
+          <br><br><br>
+          <div style="font-size: 10px; color: #888; text-align: center; border-top: 1px solid #eee; padding-top: 10px;">
+            Dokumen ini dijana secara digital melalui Sistem e-Sewaan Aset LKIM. ID Rujukan: ${data.appId}
+          </div>
+        </div>
+      `;
+
+      // C. Tukar HTML kepada PDF Blob
+      var blob = Utilities.newBlob(htmlAgreement, MimeType.HTML).getAs(MimeType.PDF);
+      blob.setName("Perjanjian_Sewaan_" + data.appId + ".pdf");
+
+      // D. Simpan ke Google Drive
       var file = DriveApp.createFile(blob);
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       var fileUrl = file.getUrl();
 
-      // 3. Simpan Link PDF
+      // 3. Simpan Link PDF Lengkap ke Lajur Z (Column 26)
       appSheet.getRange(rowIndex, 26).setValue(fileUrl);
       
       newStatus = "Berjaya";
-      userActionText = "BERSETUJU (TANDATANGAN DIREKOD)";
+      userActionText = "BERSETUJU (PERJANJIAN LENGKAP DIREKOD)";
 
     } catch (e) {
-      return { success: false, message: "Gagal menjana perjanjian: " + e.toString() };
+      return { success: false, message: "Gagal menjana perjanjian PDF: " + e.toString() };
     }
 
   } else {
@@ -543,21 +611,20 @@ function submitUserDecision(data) {
     newStatus = "Dibatalkan";
     userActionText = "MENOLAK";
   }
-  // ---------------------------------------------
 
+  // Kemaskini data lain dalam Sheet
   var timestamp = new Date().toString();
-  var startDate = new Date(appData[i][12]); // Column M
-  var duration = appData[i][13];            // Column N
+  var startDate = new Date(appData[rowIndex-1][12]); // Column M (Index 12)
+  var duration = appData[rowIndex-1][13];            // Column N (Index 13)
   var endDate = calculateEndDate(startDate, duration);
 
-  // Simpan Data ke Sheet
-  appSheet.getRange(rowIndex, 16).setValue(newStatus);     // Status
+  appSheet.getRange(rowIndex, 16).setValue(newStatus);      // Status
   appSheet.getRange(rowIndex, 22).setValue(userActionText); // User Action
   appSheet.getRange(rowIndex, 23).setValue(timestamp);      // Time
   appSheet.getRange(rowIndex, 24).setValue(finalNote);      // Note
   appSheet.getRange(rowIndex, 25).setValue(endDate);        // End Date
 
-  return { success: true, message: "Tindakan berjaya. Status kini: " + newStatus };
+  return { success: true, message: "Tahniah! Perjanjian telah dijana dan disimpan. Status kini: " + newStatus };
 }
 
 // ============================================================================
@@ -916,28 +983,59 @@ function getDashboardStats() {
     lulus: 0,
     ditolak: 0,
     dalamProses: 0,
-    kutipan: 0.00
+    kutipan: 0.00,
+    // Data Baru untuk Carta Terperinci
+    revenueByCategory: {},
+    topAssets: {} 
   };
 
   // Mula dari row 1 (skip header)
   for (var i = 1; i < data.length; i++) {
     stats.total++;
-    var status = data[i][15]; // Col P
-    var harga = data[i][16] || data[i][20]; // Harga Final (Q) atau Asal (U)
-    
-    // Bersihkan harga (buang RM dan space)
-    var nilaiHarga = parseFloat(String(harga).replace(/[^0-9.]/g, '')) || 0;
+    var status = data[i][15]; // Col P: Status
+    var harga = parseFloat(String(data[i][16] || data[i][20]).replace(/[^0-9.]/g, '')) || 0; // Harga
+    var lokasiAset = data[i][10]; // Col K: Nama Aset/Lokasi
+    var kategori = data[i][11];   // Col L: Kategori
 
+    // 1. Kira Status Utama
     if (status === 'Berjaya' || status === 'Lulus') {
       stats.lulus++;
-      stats.kutipan += nilaiHarga;
+      stats.kutipan += harga;
+
+      // 2. Kira Kutipan Ikut Kategori (Hanya yang Lulus/Berjaya)
+      if (kategori) {
+        var katKey = String(kategori).trim();
+        if (!stats.revenueByCategory[katKey]) stats.revenueByCategory[katKey] = 0;
+        stats.revenueByCategory[katKey] += harga;
+      }
+
     } else if (status === 'Ditolak' || status === 'Dibatalkan') {
       stats.ditolak++;
     } else if (status === 'Dalam Proses' || status === 'Disokong' || status === 'Menunggu Persetujuan') {
       stats.dalamProses++;
     }
+
+    // 3. Kira Aset Paling Popular (Berdasarkan Jumlah Permohonan Masuk, tak kira status)
+    // Ini membantu admin tahu aset mana yang 'laku keras' atau viral
+    if (lokasiAset) {
+      var asetName = String(lokasiAset).split('-')[0].trim(); // Ambil nama depan saja (buang negeri)
+      if (!stats.topAssets[asetName]) stats.topAssets[asetName] = 0;
+      stats.topAssets[asetName]++;
+    }
   }
   
+  // --- FORMAT DATA UNTUK FRONTEND ---
+
+  // Format Revenue Array
+  stats.revenueArray = Object.keys(stats.revenueByCategory).map(function(key) {
+    return { name: key, nilai: stats.revenueByCategory[key] };
+  }).sort(function(a, b) { return b.nilai - a.nilai }); // Susun paling tinggi ke rendah
+
+  // Format Top Assets Array (Ambil Top 5 Sahaja)
+  stats.topAssetsArray = Object.keys(stats.topAssets).map(function(key) {
+    return { name: key, jumlah: stats.topAssets[key] };
+  }).sort(function(a, b) { return b.jumlah - a.jumlah }).slice(0, 5);
+
   return stats;
 }
 
