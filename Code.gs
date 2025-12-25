@@ -304,7 +304,7 @@ function submitApplication(data) {
     sheet.appendRow(['AppID', 'Date', 'Email', 'Nama', 'IC', 'Phone', 'Syarikat', 'Alamat', 'Pekerjaan', 'Pendapatan', 'Lokasi', 'Kategori', 'TarikhMula', 'Tempoh', 'Tujuan', 'Status', 'HargaFinal', 'UlasanStaff', 'UlasanAdmin', 'ProcessedBy', 'HargaAsal', 'UserAction', 'UserTime', 'UserNote']);
   }
 
-  var id = 'APP-' + Math.floor(Math.random() * 1000000000);
+  var id = 'APP-' + new Date().getTime() + '-' + Math.floor(Math.random() * 1000);
   try {
     var rowData = [
       String(id), // 0: ID
@@ -497,6 +497,7 @@ function submitUserDecision(data) {
   var appData = appSheet.getDataRange().getDisplayValues();
 
   var rowIndex = -1;
+  // Cari row berdasarkan App ID
   for (var i = 0; i < appData.length; i++) {
     if (appData[i][0] == data.appId) {
       rowIndex = i + 1;
@@ -508,27 +509,56 @@ function submitUserDecision(data) {
 
   var newStatus = "";
   var userActionText = "";
+  var finalNote = data.note || "-";
 
+  // --- LOGIK BARU: JANA AGREEMENT JIKA TERIMA ---
   if (data.action === 'terima') {
-    newStatus = "Berjaya";
-    userActionText = "BERSETUJU";
+    
+    // 1. Validasi: Mesti ada tandatangan
+    if (!data.signature) {
+      return { success: false, message: "Sila turunkan tandatangan digital dahulu." };
+    }
+
+    try {
+      // 2. Jana PDF Perjanjian (Internal Function)
+      // Kita guna logik sama macam saveSignedAgreement tapi terus di sini
+      var contentType = 'application/pdf';
+      var cleanBase64 = data.signature.split(',')[1];
+      var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), contentType, "Perjanjian_" + data.appId + ".pdf");
+      var file = DriveApp.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      var fileUrl = file.getUrl();
+
+      // 3. Simpan Link PDF dalam nota
+      finalNote += "\n[AGREEMENT_LINK::" + fileUrl + "]";
+      
+      newStatus = "Berjaya";
+      userActionText = "BERSETUJU (TANDATANGAN DIREKOD)";
+
+    } catch (e) {
+      return { success: false, message: "Gagal menjana perjanjian: " + e.toString() };
+    }
+
   } else {
+    // Jika Tolak
     newStatus = "Dibatalkan";
     userActionText = "MENOLAK";
   }
+  // ---------------------------------------------
 
   var timestamp = new Date().toString();
-  var startDate = new Date(appData[i][12]);
-  var duration = appData[i][13];
+  var startDate = new Date(appData[i][12]); // Column M
+  var duration = appData[i][13];            // Column N
   var endDate = calculateEndDate(startDate, duration);
 
-  appSheet.getRange(rowIndex, 16).setValue(newStatus);
-  appSheet.getRange(rowIndex, 22).setValue(userActionText);
-  appSheet.getRange(rowIndex, 23).setValue(timestamp);
-  appSheet.getRange(rowIndex, 24).setValue(data.note || "-");
-  appSheet.getRange(rowIndex, 25).setValue(endDate);
+  // Simpan Data ke Sheet
+  appSheet.getRange(rowIndex, 16).setValue(newStatus);     // Status
+  appSheet.getRange(rowIndex, 22).setValue(userActionText); // User Action
+  appSheet.getRange(rowIndex, 23).setValue(timestamp);      // Time
+  appSheet.getRange(rowIndex, 24).setValue(finalNote);      // Note (with PDF Link)
+  appSheet.getRange(rowIndex, 25).setValue(endDate);        // End Date
 
-  return { success: true, message: "Tindakan berjaya direkodkan. Status kini: " + newStatus };
+  return { success: true, message: "Tindakan berjaya. Status kini: " + newStatus };
 }
 
 // ============================================================================
@@ -741,10 +771,9 @@ function adminResetPass(email) {
   var sheet = ss.getSheetByName('Users');
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (cleanString(data[i][0]) == cleanString(email)) {
-      sheet.getRange(i + 1, 2).setValue(hashPassword('123456'));
-      return { success: true, message: "Kata laluan direset ke '123456'" };
-    }
+    var newPass = Math.floor(100000 + Math.random() * 900000).toString();
+    sheet.getRange(i + 1, 2).setValue(hashPassword(newPass));
+    return { success: true, message: "Kata laluan direset ke: " + newPass };
   }
 }
 
@@ -939,7 +968,7 @@ function generateOfferLetter(appId) {
 
   if (!appData) return { success: false, message: "Data tidak dijumpai" };
 
-  // HTML Template Surat
+  // HTML Template Surat (Kini SAMA dengan Draf)
   var htmlContent = `
     <div style="font-family: Arial, sans-serif; padding: 40px; line-height: 1.6;">
       <div style="text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
@@ -960,18 +989,36 @@ function generateOfferLetter(appId) {
       <p>Sukacita dimaklumkan bahawa permohonan tuan/puan untuk menyewa aset berikut telah <strong>DILULUSKAN</strong>:</p>
 
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-        <tr><td style="padding: 8px; border: 1px solid #ddd; width: 40%; font-weight: bold;">Lokasi Aset</td><td style="padding: 8px; border: 1px solid #ddd;">${appData.lokasi}</td></tr>
-        <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Tempoh Sewaan</td><td style="padding: 8px; border: 1px solid #ddd;">${appData.tempoh}</td></tr>
-        <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Kadar Sewaan Bulanan</td><td style="padding: 8px; border: 1px solid #ddd;">RM ${appData.harga}</td></tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; width: 40%; font-weight: bold;">Lokasi Aset</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${appData.lokasi}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Tempoh Sewaan</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">${appData.tempoh}</td>
+        </tr>
+        <tr>
+            <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Kadar Sewaan Bulanan</td>
+            <td style="padding: 8px; border: 1px solid #ddd;">RM ${appData.harga}</td>
+        </tr>
       </table>
+
+      <p>Syarat-syarat tambahan:</p>
+      <ul>
+        <li>Penyewa hendaklah menjelaskan bayaran deposit sebelum kunci diserahkan.</li>
+        <li>Sebarang ubah suai struktur perlu mendapat kebenaran bertulis LKIM.</li>
+        <li>LKIM berhak menamatkan penyewaan sekiranya terdapat pelanggaran syarat.</li>
+      </ul>
 
       <p>Sila hadir ke pejabat LKIM dalam tempoh 14 hari bekerja untuk urusan perjanjian sewaan dan pembayaran deposit.</p>
       
       <br><br>
-      <p>Sekian, terima kasih.</p>
-      <p><strong>"MALAYSIA MADANI"</strong></p>
-      <br>
-      <p><i>Dokumen ini adalah cetakan komputer dan tidak memerlukan tandatangan.</i></p>
+      <div style="margin-top: 50px;">
+        <p>Sekian, terima kasih.</p>
+        <p><strong>"MALAYSIA MADANI"</strong></p>
+        <br>
+        <p><i>Dokumen ini adalah cetakan komputer dan tidak memerlukan tandatangan.</i></p>
+      </div>
     </div>
   `;
 
@@ -979,10 +1026,15 @@ function generateOfferLetter(appId) {
   var blob = Utilities.newBlob(htmlContent, "text/html", "Surat_Tawaran_" + appId + ".html");
   var pdf = blob.getAs("application/pdf");
   
-  // Tukar ke Base64 supaya user boleh download terus tanpa save ke Drive (Jimat Storage & Permission issue)
+  // Tukar ke Base64 supaya user boleh download terus
   var base64 = Utilities.base64Encode(pdf.getBytes());
   
-  return { success: true, html: htmlContent };
+  // Return format Data URI supaya browser boleh baca
+  return { 
+      success: true, 
+      data: "data:application/pdf;base64," + base64, 
+      filename: "Surat_Tawaran_" + appId + ".pdf" 
+  };
 }
 
 function getOfferLetterContent(appId) {
@@ -1114,16 +1166,18 @@ function checkExpiredRentals() {
 // Helper: Kira Tarikh Tamat berdasarkan string "1 Tahun" atau "6 Bulan"
 function calculateEndDate(startDate, durationStr) {
   var d = new Date(startDate);
-  var amount = parseInt(durationStr.replace(/[^0-9]/g, '')) || 0; // Ambil nombor sahaja
-  var unit = durationStr.toLowerCase();
+  if (isNaN(d.getTime())) return null; // Return null jika tarikh mula rosak
   
-  if (unit.includes('tahun') || unit.includes('year')) {
+  var str = String(durationStr).toLowerCase();
+  var amount = parseInt(str.replace(/[^0-9]/g, '')) || 0; 
+  
+  // Logik yang lebih fleksibel
+  if (str.includes('tahun') || str.includes('year')) {
     d.setFullYear(d.getFullYear() + amount);
-  } else if (unit.includes('bulan') || unit.includes('month')) {
-    d.setMonth(d.getMonth() + amount);
-  } else if (unit.includes('hari') || unit.includes('day')) {
+  } else if (str.includes('hari') || str.includes('day')) {
     d.setDate(d.getDate() + amount);
   } else {
+    // Default ke bulan jika perkataan 'bulan' ada ATAU tiada unit dinyatakan
     d.setMonth(d.getMonth() + (amount || 0)); 
   }
   return d;
@@ -1404,21 +1458,18 @@ function saveSignedAgreement(appId, base64Pdf) {
     var contentType = 'application/pdf';
     var cleanBase64 = base64Pdf.split(',')[1];
     var blob = Utilities.newBlob(Utilities.base64Decode(cleanBase64), contentType, "Perjanjian_" + appId + ".pdf");
-
     var file = DriveApp.createFile(blob);
     
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
     var fileUrl = file.getUrl();
     
-    var currentNoteCell = sheet.getRange(rowIndex, 25); 
+    var currentNoteCell = sheet.getRange(rowIndex, 26); 
     var currentNote = currentNoteCell.getValue();
     var newNote = currentNote + "\n[AGREEMENT SIGNED]: " + fileUrl;
     
-    sheet.getRange(rowIndex, 14).setValue(newNote); 
+    currentNoteCell.setValue(newNote);
 
     return { success: true, message: "Perjanjian berjaya ditandatangani dan disimpan!", url: fileUrl };
-
   } catch (e) {
     return { success: false, message: "Ralat Server: " + e.toString() };
   }

@@ -92,6 +92,10 @@
     setShowSignModal, // Added missing prop
     setRenewalItem, // Added missing prop
   }) => {
+
+    const [tempSignature, setTempSignature] = React.useState(null);
+    const [submittingDecision, setSubmittingDecision] = React.useState(false);
+
     React.useEffect(() => {
       if (user && user.email) fetchHistory(user.email);
     }, [user?.email]);
@@ -320,35 +324,27 @@
                           {/* COL 4: ACTIONS */}
                           <td className="p-6 align-middle text-right">
                             <div className="flex flex-col items-end space-y-2">
-                              {/* Primary Action */}
                               {h.status === "Berjaya" && (
                                 (() => {
-                                  // Check dulu ada tak link agreement dalam nota user
+                                  // Kita anggap agreement link dah ada dalam userNote (sebab backend baru simpan di situ)
                                   const signedLink = getAgreementLink(h.userNote);
 
                                   if (signedLink) {
-                                    // SITUASI A: DAH SIGN -> Tunjuk Butang Lihat Agreement
                                     return (
                                       <a
                                         href={signedLink}
                                         target="_blank"
-                                        className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-green-700 transition-all flex items-center ml-2 no-underline"
+                                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-blue-700 transition-all flex items-center ml-2 no-underline"
                                       >
                                         <Icons.FileText className="w-3 h-3 mr-1" /> Lihat Perjanjian
                                       </a>
                                     );
                                   } else {
-                                    // SITUASI B: BELUM SIGN -> Tunjuk Butang Sign (Draf ada dalam modal nanti)
+                                    // Fallback: Jika data lama (belum ada link), mungkin tunjuk text biasa
                                     return (
-                                      <button
-                                        onClick={() => {
-                                          setSignData({ appId: h.appId, name: user.nama, ic: user.noIc || "-" });
-                                          setShowSignModal(true);
-                                        }}
-                                        className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-blue-700 transition-all flex items-center ml-2"
-                                      >
-                                        <Icons.PenTool className="w-3 h-3 mr-1" /> Tandatangan
-                                      </button>
+                                      <span className="text-green-600 text-xs font-bold border border-green-200 px-2 py-1 rounded bg-green-50">
+                                        Aktif
+                                      </span>
                                     );
                                   }
                                 })()
@@ -503,64 +499,6 @@
                   </div>
                 )}
 
-                {viewHistoryDetail.status === "Menunggu Persetujuan" && (
-                  <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6 shadow-md animate-pulse-slow relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-orange-200 rounded-full blur-2xl opacity-50 -mr-10 -mt-10 pointer-events-none"></div>
-                    <div className="flex items-start mb-4 relative z-10">
-                      <div className="bg-orange-100 p-2 rounded-full mr-3">
-                        <Icons.AlertCircle className="w-6 h-6 text-orange-600" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-orange-900 text-lg">Tindakan Diperlukan</h4>
-                        <p className="text-sm text-orange-800 mt-1">Permohonan diluluskan. Adakah anda bersetuju dengan kadar sewaan ini?</p>
-                      </div>
-                    </div>
-                    <div className="mb-4 bg-white p-3 rounded-lg border border-orange-100 relative z-10">
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Catatan Anda (Pilihan)</label>
-                      <textarea
-                        id="userDecisionNote"
-                        rows="2"
-                        className="w-full p-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-orange-400 resize-none"
-                        placeholder="Contoh: Saya setuju..."
-                      ></textarea>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
-                      <button
-                        onClick={() => {
-                          if (!confirm("Terima tawaran ini?")) return;
-                          const note = document.getElementById("userDecisionNote").value;
-                          google.script.run
-                            .withSuccessHandler((res) => {
-                              alert(res.message);
-                              setViewHistoryDetail(null);
-                              fetchHistory(user.email);
-                            })
-                            .submitUserDecision({ appId: viewHistoryDetail.appId, action: "terima", note: note });
-                        }}
-                        className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-sm flex justify-center items-center"
-                      >
-                        <Icons.CheckCircle className="w-5 h-5 mr-2" /> TERIMA TAWARAN
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!confirm("Tolak tawaran ini?")) return;
-                          const note = document.getElementById("userDecisionNote").value;
-                          google.script.run
-                            .withSuccessHandler((res) => {
-                              alert(res.message);
-                              setViewHistoryDetail(null);
-                              fetchHistory(user.email);
-                            })
-                            .submitUserDecision({ appId: viewHistoryDetail.appId, action: "tolak", note: note });
-                        }}
-                        className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold py-3 rounded-xl shadow-sm flex justify-center items-center"
-                      >
-                        <Icons.XCircle className="w-5 h-5 mr-2" /> TOLAK
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {(viewHistoryDetail.status === "Lulus" ||
                   viewHistoryDetail.status === "Berjaya" ||
                   viewHistoryDetail.status === "Menunggu Persetujuan") && (
@@ -618,6 +556,8 @@
     const [signData, setSignData] = useState({ appId: null, name: "", ic: "" });
     const [signatureImg, setSignatureImg] = useState(null); // Simpan gambar sign
     const [showCalendarAsset, setShowCalendarAsset] = useState(null); // State untuk modal kalendar
+    const [tempSignature, setTempSignature] = useState(null); 
+    const [submittingDecision, setSubmittingDecision] = useState(false);
 
     const [view, setView] = useState("home");
     const [categoryFilter, setCategoryFilter] = useState("");
@@ -2568,19 +2508,34 @@
                     )}
 
                     {/* ACTION ZONE (Only for 'Menunggu Persetujuan') */}
+                    {/* --- MULA BLOK TANDATANGAN --- */}
                     {viewHistoryDetail.status === "Menunggu Persetujuan" && (
-                      <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-6 shadow-md animate-pulse-slow">
+                      <div className="mt-4 bg-orange-50 border border-orange-200 rounded-xl p-6 shadow-md relative overflow-hidden">
                         <div className="flex items-start mb-5">
                           <div className="bg-orange-100 p-2 rounded-full mr-4">
                             <Icons.AlertCircle className="w-6 h-6 text-orange-600" />
                           </div>
                           <div>
-                            <h4 className="font-bold text-orange-900 text-lg">Tindakan Diperlukan</h4>
+                            <h4 className="font-bold text-orange-900 text-lg">Pengesahan Terakhir</h4>
                             <p className="text-sm text-orange-800 mt-1 leading-relaxed">
-                              Permohonan anda telah <strong>diluluskan</strong>. Sila semak kadar sewaan baru di atas. Adakah anda bersetuju untuk
-                              meneruskan sewaan ini?
+                              Permohonan telah diluluskan. Sila baca terma, turunkan tandatangan digital di bawah, dan tekan butang "Sahkan & Terima".
                             </p>
                           </div>
+                        </div>
+
+                        {/* 1. KOTAK TANDATANGAN */}
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 mb-5">
+                            <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                                Tandatangan Digital Anda <span className="text-red-500">*</span>
+                            </label>
+                            <SignaturePad 
+                                onEnd={(canvas) => {
+                                    setTempSignature(canvas.toDataURL("image/png")); 
+                                }} 
+                            />
+                            <p className="text-[10px] text-slate-400 mt-2 text-center">
+                                Lukis tandatangan anda dalam kotak di atas.
+                            </p>
                         </div>
 
                         {/* Input Nota Pengguna */}
@@ -2590,67 +2545,82 @@
                             id="userDecisionNote"
                             rows="2"
                             className="w-full p-2 border border-slate-200 rounded text-sm focus:outline-none focus:border-orange-400 resize-none"
-                            placeholder="Contoh: Saya setuju dengan kadar tersebut..."
+                            placeholder="Saya bersetuju dengan syarat..."
                           ></textarea>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* BUTANG TERIMA */}
                           <button
+                            disabled={submittingDecision}
                             onClick={() => {
-                              if (!confirm("Anda pasti untuk Menerima tawaran ini?")) return;
+                              if (!tempSignature) {
+                                  alert("Sila turunkan tandatangan digital sebelum menerima tawaran.");
+                                  return;
+                              }
+                              if (!confirm("Sahkan penerimaan dan tandatangan ini?")) return;
+                              
+                              setSubmittingDecision(true);
                               const noteVal = document.getElementById("userDecisionNote").value;
 
-                              // Panggil Backend
                               google.script.run
                                 .withSuccessHandler((res) => {
-                                  // 1. Tunjuk mesej berjaya
-                                  alert(res.message);
-
-                                  // 2. Tutup Modal
-                                  setViewHistoryDetail(null);
-                                  // (Atau setSelectedApp(null) bergantung kod anda)
-
-                                  // 3. Refresh History User (Supaya status bertukar jadi Berjaya)
-                                  if (view === "profil") fetchHistory(user.email);
-
-                                  // 4. REFRESH DATA ASET (PENTING: INI YANG HILANG)
-                                  // Ini akan tarik data kekosongan baru dari database
-                                  loadPublicData();
+                                  setSubmittingDecision(false);
+                                  if (res.success) {
+                                      alert(res.message);
+                                      setViewHistoryDetail(null);
+                                      if (typeof fetchHistory === 'function') fetchHistory(user.email);
+                                      // Refresh data public jika perlu
+                                      if (typeof loadPublicData !== 'undefined') loadPublicData();
+                                  } else {
+                                      alert("Ralat: " + res.message);
+                                  }
+                                })
+                                .withFailureHandler((err) => {
+                                    setSubmittingDecision(false);
+                                    alert("Ralat Server: " + err.message);
                                 })
                                 .submitUserDecision({
                                   appId: viewHistoryDetail.appId,
                                   action: "terima",
                                   note: noteVal,
+                                  signature: tempSignature 
                                 });
                             }}
                             className="bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl shadow-sm flex justify-center items-center transition-transform active:scale-95"
                           >
-                            <Icons.CheckCircle className="w-5 h-5 mr-2" /> TERIMA TAWARAN
+                            {submittingDecision ? "Memproses..." : <><Icons.CheckCircle className="w-5 h-5 mr-2" /> SAHKAN & TERIMA</>}
                           </button>
 
+                          {/* BUTANG TOLAK */}
                           <button
+                            disabled={submittingDecision}
                             onClick={() => {
                               if (!confirm("Anda pasti untuk Menolak tawaran ini?")) return;
+                              setSubmittingDecision(true);
                               const noteVal = document.getElementById("userDecisionNote").value;
                               google.script.run
                                 .withSuccessHandler((res) => {
+                                  setSubmittingDecision(false);
                                   alert(res.message);
                                   setViewHistoryDetail(null);
-                                  if (view === "profil") fetchHistory(user.email);
+                                  if (typeof fetchHistory === 'function') fetchHistory(user.email);
                                 })
                                 .submitUserDecision({
                                   appId: viewHistoryDetail.appId,
                                   action: "tolak",
                                   note: noteVal,
+                                  signature: null 
                                 });
                             }}
                             className="bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold py-3.5 rounded-xl shadow-sm flex justify-center items-center transition-colors"
                           >
-                            <Icons.XCircle className="w-5 h-5 mr-2" /> TOLAK
+                            <Icons.XCircle className="w-5 h-5 mr-2" /> TOLAK TAWARAN
                           </button>
                         </div>
                       </div>
                     )}
+                    {/* --- TAMAT BLOK TANDATANGAN --- */}
 
                     {/* BUTANG DOWNLOAD SURAT TAWARAN (Hanya Jika Lulus/Berjaya) */}
                     {(viewHistoryDetail.status === "Lulus" ||

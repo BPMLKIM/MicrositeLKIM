@@ -393,7 +393,21 @@
 
     const handleDeleteItem = (type, index) => {
       if (!confirm("Padam item ini?")) return;
-      google.script.run.withSuccessHandler(() => { setRefresh(p => p + 1); if (onUpdate) onUpdate(); }).deleteItem(type, index);
+      
+      setLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(() => { 
+            setLoading(false);
+            setRefresh(p => p + 1); 
+            if (onUpdate) onUpdate(); 
+            setToast({ message: "Item berjaya dipadam.", type: "success" });
+        })
+        .withFailureHandler((err) => {
+            setLoading(false);
+            alert("Ralat memadam: " + err.message);
+        })
+        .deleteItem(type, index);
     };
 
     const handleAddBanner = (e) => {
@@ -456,6 +470,14 @@
     // ============================================================================
     return (
       <>
+         {loading && (
+          <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center animate-bounce-slow">
+              <Icons.Loader className="w-10 h-10 animate-spin text-blue-600 mb-3"/>
+              <p className="font-bold text-slate-700">Sedang Memproses...</p>
+            </div>
+          </div>
+        )}
         {/* BACKGROUND MESH (Blob Biru & Oren) */}
         <div className="fixed inset-0 z-0 pointer-events-none">
             <div className="absolute top-[-10%] left-[-5%] w-[50%] h-[50%] rounded-full bg-blue-200/40 blur-[120px] animate-pulse-slow"></div>
