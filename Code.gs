@@ -3,6 +3,7 @@
 // ============================================================================
 
 var SPREADSHEET_ID = ''; // Masukkan ID Spreadsheet anda di sini jika perlu
+var PASSWORD_SALT = "LKIM_SECURE_SALT_v1_#99283!";
 
 function getDb() {
   return SPREADSHEET_ID ? SpreadsheetApp.openById(SPREADSHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
@@ -20,13 +21,21 @@ function doGet() {
 // 1. FUNGSI UTILITI & KESELAMATAN
 // ============================================================================
 
+function sanitizeInput(str) {
+  if (!str) return "";
+  var stringVal = String(str);
+  return stringVal.replace(/<[^>]*>?/gm, "").trim();
+}
+
 function cleanString(str) {
-  return str ? String(str).trim().toLowerCase() : "";
+  return str ? sanitizeInput(str).toLowerCase() : "";
 }
 
 function hashPassword(password) {
   if (!password) return "";
-  var rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(password).trim());
+  // Gabungkan Password + Salt sebelum hash
+  var saltedPayload = String(password).trim() + PASSWORD_SALT; 
+  var rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, saltedPayload);
   var txtHash = '';
   for (var i = 0; i < rawHash.length; i++) {
     var hashVal = rawHash[i];
@@ -1795,16 +1804,37 @@ function requestPasswordReset(email) {
   var tokenSheet = ss.getSheetByName('ResetTokens');
   
   // 1. Pastikan Sheet ResetTokens wujud
-  if (!tokenSheet) {
-    tokenSheet = ss.insertSheet('ResetTokens');
-    tokenSheet.appendRow(['Email', 'OTP', 'ExpiryTimestamp']);
-  }
+  if (!tokenSheet) tokenSheet = ss.insertSheet('ResetTokens');
 
   var cleanEmail = cleanString(email);
+  
+  // 1. RATE LIMITING CHECK
+  var tokens = tokenSheet.getDataRange().getValues();
+  var now = new Date().getTime();
+  var twoMinutes = 2 * 60 * 1000;
+
+  // Semak dari bawah (rekod terkini)
+  for (var i = tokens.length - 1; i > 0; i--) {
+    var rowEmail = cleanString(tokens[i][0]);
+    var timestamp = tokens[i][3]; // Kita perlu tambah col timestamp created jika belum ada. 
+    // Tapi kita boleh guna expiry masa (Column C - Index 2). 
+    // Expiry = Created + 15 min. So, Created = Expiry - 15 min.
+    
+    if (rowEmail === cleanEmail) {
+      var expiryTime = parseFloat(tokens[i][2]);
+      var createdTime = expiryTime - (15 * 60 * 1000); 
+      
+      // Jika request terakhir dibuat kurang dari 2 minit lepas
+      if ((now - createdTime) < twoMinutes) {
+        return { success: false, message: "Sila tunggu 2 minit sebelum meminta OTP baru." };
+      }
+      break; // Jumpa latest record, stop checking
+    }
+  }
+
+// 2. Semak User Wujud
   var userFound = false;
   var userData = userSheet.getDataRange().getValues();
-
-  // 2. Cari jika emel wujud dalam sistem
   for (var i = 1; i < userData.length; i++) {
     if (cleanString(userData[i][0]) == cleanEmail) {
       userFound = true;
@@ -1837,9 +1867,8 @@ function requestPasswordReset(email) {
     });
     return { success: true, message: "Kod OTP telah dihantar ke emel anda." };
   } catch (e) {
-    // Jika kuota emel habis atau error, kita return error tapi (untuk testing) boleh tengok di Log
-    console.log("OTP untuk " + email + ": " + otp); 
-    return { success: true, message: "Kod OTP dijana (Semak Console/Logs jika emel gagal). Kod: " + otp }; 
+    console.log("OTP Error for " + email + ": " + e.toString());
+    return { success: false, message: "Gagal hantar emel. Sila hubungi Admin." };
   }
 }
 
