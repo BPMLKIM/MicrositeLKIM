@@ -198,39 +198,6 @@
     const toggleCat = (cat) => { setExpandedCats(prev => ({...prev, [cat]: !prev[cat]}));};
     const [showStats, setShowStats] = useState(false);
 
-    const printStyles = `
-    @media print {
-      /* 1. Sembunyikan SEMUA benda dalam body */
-      body * {
-        visibility: hidden;
-      }
-
-      /* 2. Jadikan bahagian 'print-area' sahaja yang nampak */
-      #print-area, #print-area * {
-        visibility: visible;
-      }
-
-      /* 3. Posisikan 'print-area' ke bucu atas kertas */
-      #print-area {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        background-color: white;
-        border: none; /* Buang border luaran jika tak perlu */
-        box-shadow: none; /* Buang bayang */
-      }
-
-      /* 4. Paksa browser cetak warna background (header table dsb) */
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-    }
-  `;
-
     // State untuk Banner
   const [showBannerForm, setShowBannerForm] = React.useState(false);
   const [editingBanner, setEditingBanner] = React.useState(null);
@@ -545,8 +512,7 @@
     // ============================================================================
     return (
       <>
-      <style>{printStyles}</style>
-         {loading && (
+        {loading && (
           <div className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center animate-bounce-slow">
               <Icons.Loader className="w-10 h-10 animate-spin text-blue-600 mb-3"/>
@@ -2154,17 +2120,40 @@
 
             {/* --- TAB 9: LAPORAN --- */}
             {tab === 'reports' && (
-              <div className="animate-fade-in p-6" id="print-area">
+              <div className="animate-fade-in p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-800">Ringkasan Laporan Inventori Aset</h2>
                     <p className="text-sm text-slate-500">Status semasa aset LKIM mengikut kategori.</p>
                   </div>
+                  {/* BUTANG BARU: BUKA POPUP CETAKAN */}
                   <button
-                    onClick={() => window.print()} 
-                    className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center shadow-lg"
+                    onClick={() => {
+                      setLoading(true);
+                      google.script.run
+                        .withSuccessHandler((res) => {
+                           setLoading(false);
+                           if (res.success) {
+                              // Buka tetingkap baru
+                              const win = window.open('', '_blank', 'width=900,height=700');
+                              // Tulis HTML backend ke dalam tetingkap baru
+                              win.document.write(res.html);
+                              win.document.close(); // Penting supaya browser tahu loading dah siap
+                           } else {
+                              alert("Gagal menjana laporan.");
+                           }
+                        })
+                        .withFailureHandler((e) => {
+                           setLoading(false);
+                           alert("Ralat: " + e.message);
+                        })
+                        .getInventoryReportHTML(); // Panggil fungsi baru (HTML only)
+                    }} 
+                    disabled={loading}
+                    className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-3 rounded-xl text-sm font-bold flex items-center shadow-lg transition-transform hover:scale-105"
                   >
-                    <Icons.Printer className="w-4 h-4 mr-2" /> Cetak / Simpan PDF
+                    {loading ? <Icons.Loader className="w-4 h-4 mr-2 animate-spin"/> : <Icons.Printer className="w-4 h-4 mr-2" />}
+                    Cetak Laporan
                   </button>
                 </div>
 

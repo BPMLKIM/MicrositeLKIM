@@ -1934,3 +1934,136 @@ function verifyAndResetPassword(email, otp, newPassword) {
 
   return { success: false, message: "Pengguna tidak dijumpai." };
 }
+
+// ============================================================================
+// 19. MODUL JANA PDF LAPORAN INVENTORI
+// ============================================================================
+
+function getInventoryReportHTML() {
+  var ss = getDb(); //
+  var settings = getSystemSettings(); //
+  
+  // Dapatkan data statistik
+  var stats = getAssetInventoryStats(); //
+  var totalAssets = 0;
+  var totalActive = 0;
+  var totalInactive = 0;
+
+  // Kira total
+  stats.forEach(function(item){
+    totalAssets += item.total;
+    totalActive += item.aktif;
+    totalInactive += item.tidakAktif;
+  });
+
+  var reportDate = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm");
+
+  // HTML Putih Bersih (Sama macam tadi, tapi tiada penukaran PDF)
+  var html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Laporan Inventori Aset</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 12px; color: #000; padding: 40px; background: white; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+          .header h1 { margin: 0; font-size: 18px; text-transform: uppercase; }
+          .header p { margin: 5px 0 0; font-size: 10px; }
+          .info { margin-bottom: 20px; text-align: right; font-size: 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+          th { background-color: #f0f0f0; font-weight: bold; }
+          .text-left { text-align: left; }
+          .footer-row { background-color: #ddd; font-weight: bold; }
+          
+          /* Butang Print (Hanya nampak di skrin, hilang bila print) */
+          .no-print { text-align: center; margin-bottom: 20px; }
+          .btn-print { background: #1e293b; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+          @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+           <button onclick="window.print()" class="btn-print">🖨️ CETAK SEKARANG</button>
+           <p style="font-size:10px; color:#666; margin-top:5px;">(Format ini telah dioptimumkan untuk kertas A4)</button>
+        </div>
+
+        <div class="header">
+          <h1>${settings.title.toUpperCase()}</h1>
+          <p>${settings.subtitle}</p>
+          <p>${settings.address}</p>
+        </div>
+
+        <div class="info">
+          <strong>LAPORAN RINGKASAN INVENTORI ASET</strong><br>
+          Dijana pada: ${reportDate}
+        </div>
+
+        <div style="text-align: center; margin-bottom: 20px; border: 1px solid #ccc; padding: 15px;">
+           <div style="display:inline-block; width: 30%; border-right: 1px solid #ccc;">
+              <span style="font-size: 20px; font-weight: bold;">${totalAssets}</span><br>
+              <span style="font-size: 9px;">JUMLAH ASET</span>
+           </div>
+           <div style="display:inline-block; width: 30%; border-right: 1px solid #ccc;">
+              <span style="font-size: 20px; font-weight: bold;">${totalActive}</span><br>
+              <span style="font-size: 9px;">AKTIF</span>
+           </div>
+           <div style="display:inline-block; width: 30%;">
+              <span style="font-size: 20px; font-weight: bold;">${totalInactive}</span><br>
+              <span style="font-size: 9px;">TIDAK AKTIF</span>
+           </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th width="5%">BIL</th>
+              <th width="45%" class="text-left">KATEGORI ASET</th>
+              <th width="15%">JUMLAH UNIT</th>
+              <th width="15%">AKTIF</th>
+              <th width="20%">ROSAK / PENUH</th>
+            </tr>
+          </thead>
+          <tbody>
+  `;
+
+  for (var i = 0; i < stats.length; i++) {
+    html += `
+      <tr>
+        <td>${i + 1}</td>
+        <td class="text-left"><strong>${stats[i].nama}</strong></td>
+        <td>${stats[i].total}</td>
+        <td>${stats[i].aktif}</td>
+        <td>${stats[i].tidakAktif}</td>
+      </tr>
+    `;
+  }
+
+  html += `
+            <tr class="footer-row">
+              <td colspan="2" class="text-left">JUMLAH BESAR</td>
+              <td>${totalAssets}</td>
+              <td>${totalActive}</td>
+              <td>${totalInactive}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <br><br>
+        <div style="font-size: 9px; text-align: center; color: #555; margin-top: 50px;">
+           <i>Dokumen ini dijana oleh Sistem e-Sewaan Aset LKIM.</i>
+        </div>
+        
+        <script>
+           // Auto Print bila laman dibuka
+           window.onload = function() { setTimeout(function(){ window.print(); }, 500); }
+        </script>
+      </body>
+    </html>
+  `;
+
+  return { success: true, html: html };
+}
