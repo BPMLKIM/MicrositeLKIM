@@ -340,7 +340,9 @@ function submitApplication(data) {
     ];
 
     sheet.appendRow(rowData);
-    logAudit(data.email, "user", "MOHON_ASET", "Memohon aset: " + data.lokasi);
+    // Kod Baru
+    var identitiUser = data.nama + " (" + data.email + ")";
+    logAudit(identitiUser, "user", "MOHON_ASET", "Memohon aset: " + data.lokasi);
     removeFromWaitingList(data.email, data.lokasi);
     return { success: true, message: "Permohonan berjaya dihantar! ID: " + id };
   } catch (e) {
@@ -451,7 +453,8 @@ function processApplication(data) {
   // -----------------------------------------------------------------------------
 
   // Dapatkan emel staff/admin dari sheet Users (atau guna nama je sementara)
-  logAudit(data.staffName, data.userRole, "PROSES_PERMOHONAN", "Status ditukar ke: " + newStatus + " (Row: " + data.rowIndex + ")");
+  var identitiStaff = data.staffName + " (" + data.staffEmail + ")";
+  logAudit(identitiStaff, data.userRole, "PROSES_PERMOHONAN", "Status ditukar ke: " + newStatus + " (Row: " + data.rowIndex + ")");
 
   return { success: true, message: "Keputusan berjaya dikemaskini kepada: " + newStatus };
 }
@@ -785,7 +788,10 @@ function loginUser(email, password) {
       // -----------------------------------------
 
       sheet.getRange(i + 1, 7).setValue(new Date()); // Update Last Login
-      logAudit(email, users[i][4] || "user", "LOGIN", "Pengguna berjaya log masuk.");
+
+      var identitiUser = users[i][2] + " (" + email + ")"; // users[i][2] ialah Nama
+      logAudit(identitiUser, users[i][4] || "user", "LOGIN", "Pengguna berjaya log masuk.");
+
       return {
         success: true,
         user: {

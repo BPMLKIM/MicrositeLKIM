@@ -600,6 +600,15 @@
     // ----------------------------------------------------------
 
     useEffect(() => {
+      if (toast) {
+        const timer = setTimeout(() => {
+          setToast(null);
+        }, 3000);
+        return () => clearTimeout(timer);
+      }
+    }, [toast]);
+
+    useEffect(() => {
       window.scrollTo({
         top: 0,
         left: 0,
@@ -1229,7 +1238,10 @@
               <AdminDashboard
                 user={user}
                 setToast={setToast}
-                onUpdate={loadPublicData}
+                onUpdate={() => {
+                    loadPublicData();
+                    loadTaskCount(user.role);
+                }}
               />
             )}
             {view === "home" && (
