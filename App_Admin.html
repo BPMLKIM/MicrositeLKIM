@@ -17,147 +17,182 @@
   const COLORS = ['#1e3a8a', '#0f766e', '#f97316', '#8b5cf6', '#64748b'];
 
   // ============================================================================
-  // 1. KOMPONEN CARTA (UI GLASS)
+  // 1. KOMPONEN CARTA (UI GLASS - DIPERKEMASKINI: EXECUTIVE VIEW)
   // ============================================================================
 
-  const DashboardCharts = ({ apps, stats }) => {
+  const DashboardCharts = ({ apps, stats, assets, tickets }) => {
     if (!BarChart || !PieChart) return null;
     if (!apps || !stats) return null;
 
-    // Data Pie Chart Status
-    const pieData = [
-      { name: 'Lulus / Berjaya', value: stats.lulus },
+    // --- A. DATA STATUS PERMOHONAN (Sedia Ada) ---
+    const pieDataApp = [
+      { name: 'Berjaya/Lulus', value: stats.lulus },
       { name: 'Dalam Proses', value: stats.dalamProses },
       { name: 'Ditolak', value: stats.ditolak },
     ].filter(d => d.value > 0);
 
-    // Data Trend Bulanan
+    // --- B. DATA TREND BULANAN (Sedia Ada) ---
     const processMonthlyData = () => {
       const monthlyCounts = {};
       const months = ["Jan", "Feb", "Mac", "Apr", "Mei", "Jun", "Jul", "Ogo", "Sep", "Okt", "Nov", "Dis"];
       apps.forEach(app => {
         try {
-          let dateParts = app.dateTime.split('/');
-          if (dateParts.length >= 2) {
-            let monthIndex = parseInt(dateParts[1]) - 1;
-            if (months[monthIndex]) {
-              monthlyCounts[months[monthIndex]] = (monthlyCounts[months[monthIndex]] || 0) + 1;
-            }
+          // Format tarikh dalam sistem mungkin DD/MM/YYYY atau YYYY-MM-DD
+          // Kita cuba handle mudah: cari bulan
+          const d = new Date(app.dateTime);
+          if(!isNaN(d)) {
+             monthlyCounts[months[d.getMonth()]] = (monthlyCounts[months[d.getMonth()]] || 0) + 1;
           }
         } catch (e) {}
       });
-      return months.map(m => ({ name: m, Jumlah: monthlyCounts[m] || 0 }));
+      return months.map(m => ({ name: m, Permohonan: monthlyCounts[m] || 0 }));
     };
+    const barDataTrend = processMonthlyData();
 
-    const barData = processMonthlyData();
+    // --- C. (BARU) ANALISIS KEROSAKAN (HOTSPOT) ---
+    // Kira aset mana paling banyak tiket aduan
+    const processMaintenanceData = () => {
+        if (!tickets || tickets.length === 0) return [];
+        const counts = {};
+        tickets.forEach(t => {
+            const name = t.asset || "Lain-lain";
+            counts[name] = (counts[name] || 0) + 1;
+        });
+        // Ambil Top 5 Aset Paling Kerap Rosak
+        return Object.keys(counts)
+            .map(k => ({ name: k, Aduan: counts[k] }))
+            .sort((a,b) => b.Aduan - a.Aduan)
+            .slice(0, 5);
+    };
+    const barDataMaintenance = processMaintenanceData();
+
+    // --- D. (BARU) STATUS PENGHUNIAN ASET (OCCUPANCY) ---
+    const processOccupancyData = () => {
+        if (!assets || assets.length === 0) return [];
+        let penuh = 0;
+        let aktif = 0; // Aktif bermaksud ada kekosongan
+        let rosak = 0;
+
+        assets.forEach(a => {
+            if (a.status === 'Penuh' || a.status === 'Penuh (Manual)') penuh++;
+            else if (a.status === 'Aktif') aktif++;
+            else rosak++; // Penyelenggaraan / Ditutup
+        });
+
+        return [
+            { name: 'Penuh Diisi', value: penuh, color: '#10b981' }, // Hijau
+            { name: 'Ada Kekosongan', value: aktif, color: '#3b82f6' }, // Biru
+            { name: 'Rosak/Tutup', value: rosak, color: '#ef4444' } // Merah
+        ].filter(d => d.value > 0);
+    };
+    const pieDataAsset = processOccupancyData();
 
     return (
-      <div className="space-y-6 animate-fade-in mb-8">
+      <div className="space-y-8 animate-fade-in mb-10">
         
-        {/* BARIS 1: Trend & Status */}
+        {/* HEADER DASHBOARD */}
+        <div className="flex items-center space-x-2 mb-2">
+            <div className="h-8 w-1.5 bg-gradient-to-b from-blue-600 to-purple-600 rounded-full"></div>
+            <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">Laporan Eksekutif</h3>
+        </div>
+
+        {/* BARIS 1: OPERASI UTAMA (Permohonan & Kewangan) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          {/* CARTA TREND PERMOHONAN */}
+          {/* 1. TREND PERMOHONAN */}
           <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-blue-900/10 transition-all">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-             <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-                <div className="p-2 bg-blue-100/50 backdrop-blur-md rounded-xl mr-3 text-blue-700 shadow-sm">
-                   <Icons.BarChart2 className="w-5 h-5"/>
-                </div>
-                Trend Permohonan Bulanan
-             </h3>
-             <div className="h-64 w-full text-xs relative z-10">
+             <h4 className="font-bold text-slate-700 mb-4 flex items-center">
+                <Icons.TrendingUp className="w-5 h-5 mr-2 text-blue-600"/> Trend Permohonan
+             </h4>
+             <div className="h-64 w-full text-xs">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={barData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(203, 213, 225, 0.5)" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold'}} />
-                    <YAxis axisLine={false} tickLine={false} allowDecimals={false} tick={{fill: '#475569'}} />
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }} />
-                    <Bar dataKey="Jumlah" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={20} />
+                  <BarChart data={barDataTrend}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b'}} />
+                    <Tooltip contentStyle={{borderRadius:'12px', border:'none', boxShadow:'0 10px 15px -3px rgba(0,0,0,0.1)'}} />
+                    <Bar dataKey="Permohonan" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={30} />
                   </BarChart>
                 </ResponsiveContainer>
              </div>
           </div>
 
-          {/* CARTA PECAHAN STATUS */}
-          <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-orange-500/10 transition-all">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-             <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-                <div className="p-2 bg-orange-100/50 backdrop-blur-md rounded-xl mr-3 text-orange-600 shadow-sm">
-                   <Icons.PieChart className="w-5 h-5"/>
-                </div>
-                Pecahan Status Keseluruhan
-             </h3>
-             <div className="h-64 w-full flex items-center justify-center text-xs relative z-10">
+          {/* 2. PRESTASI KUTIPAN (Kewangan) */}
+          <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-green-900/10 transition-all">
+             <h4 className="font-bold text-slate-700 mb-4 flex items-center">
+                <Icons.DollarSign className="w-5 h-5 mr-2 text-green-600"/> Prestasi Kutipan (RM)
+             </h4>
+             <div className="h-64 w-full text-xs">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" stroke="none">
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle"/>
-                  </PieChart>
+                  <BarChart data={stats.revenueArray} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
+                    <Tooltip formatter={(value) => `RM ${value.toLocaleString()}`} contentStyle={{borderRadius:'12px', border:'none'}} />
+                    <Bar dataKey="nilai" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
+                  </BarChart>
                 </ResponsiveContainer>
              </div>
           </div>
         </div>
 
-        {/* BARIS 2: KUTIPAN & ASET POPULAR (STATISTIK BARU) */}
-        {stats.revenueArray && stats.topAssetsArray && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* BARIS 2: PENGURUSAN ASET (Kesihatan Aset) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* CARTA KUTIPAN MENGIKUT KATEGORI */}
-            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-green-500/10 transition-all">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-               <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-                  <div className="p-2 bg-green-100/50 backdrop-blur-md rounded-xl mr-3 text-green-600 shadow-sm">
-                     <Icons.DollarSign className="w-5 h-5"/>
-                  </div>
-                  Prestasi Kutipan (RM)
-               </h3>
-               <div className="h-64 w-full text-xs relative z-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.revenueArray} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(203, 213, 225, 0.5)" />
-                      <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(val) => `RM${val/1000}k`} tick={{fill: '#475569'}} />
-                      <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold', fontSize: 10}} />
-                      <Tooltip formatter={(value) => `RM ${value.toLocaleString()}`} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} cursor={{ fill: 'rgba(34, 197, 94, 0.1)' }} />
-                      <Bar dataKey="nilai" fill="#10b981" radius={[0, 6, 6, 0]} barSize={20} />
-                    </BarChart>
-                  </ResponsiveContainer>
-               </div>
-            </div>
-
-            {/* CARTA 5 ASET PALING POPULAR */}
-            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative overflow-hidden group hover:shadow-purple-500/10 transition-all">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-               <h3 className="font-bold text-slate-700 mb-6 flex items-center relative z-10">
-                  <div className="p-2 bg-purple-100/50 backdrop-blur-md rounded-xl mr-3 text-purple-600 shadow-sm">
-                     <Icons.TrendingUp className="w-5 h-5"/>
-                  </div>
-                  Top 5 Aset Paling Diminati
-               </h3>
-               <div className="h-64 w-full text-xs relative z-10">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={stats.topAssetsArray} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(203, 213, 225, 0.5)" />
-                      <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" width={110} axisLine={false} tickLine={false} tick={{fill: '#475569', fontWeight: 'bold', fontSize: 10}} />
-                      <Tooltip cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                      <Bar dataKey="jumlah" fill="#8b5cf6" radius={[0, 6, 6, 0]} barSize={20}>
-                        {stats.topAssetsArray.map((entry, index) => (
-                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+            {/* 3. STATUS ASET (Occupancy) */}
+            <div className="bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative">
+                <h4 className="font-bold text-slate-700 mb-4 flex items-center">
+                    <Icons.PieChart className="w-5 h-5 mr-2 text-purple-600"/> Status Aset
+                </h4>
+                <div className="h-56 w-full text-xs">
+                    <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie data={pieDataAsset} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">
+                        {pieDataAsset.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-               </div>
+                        </Pie>
+                        <Tooltip />
+                        <Legend verticalAlign="bottom" iconType="circle" />
+                    </PieChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
 
-          </div>
-        )}
+            {/* 4. HOTSPOT KEROSAKAN (Maintenance) - PENTING! */}
+            <div className="md:col-span-2 bg-white/60 backdrop-blur-xl p-6 rounded-[2rem] shadow-xl border border-white/60 relative">
+                <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-slate-700 flex items-center">
+                        <Icons.AlertTriangle className="w-5 h-5 mr-2 text-red-500"/> Hotspot Aduan Kerosakan
+                    </h4>
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-lg font-bold">TOP 5</span>
+                </div>
+                
+                {barDataMaintenance.length > 0 ? (
+                    <div className="h-56 w-full text-xs">
+                        <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={barDataMaintenance}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b'}} interval={0} />
+                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} />
+                            <Tooltip cursor={{fill: '#fee2e2'}} contentStyle={{borderRadius:'12px', border:'none'}} />
+                            <Bar dataKey="Aduan" fill="#ef4444" radius={[6, 6, 0, 0]} barSize={40}>
+                                {barDataMaintenance.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={index === 0 ? '#dc2626' : '#ef4444'} /> 
+                                ))}
+                            </Bar>
+                        </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <div className="h-56 flex flex-col items-center justify-center text-slate-400">
+                        <Icons.CheckCircle className="w-10 h-10 mb-2 text-green-200"/>
+                        <p>Tiada aduan direkodkan setakat ini.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+
       </div>
     );
   };
@@ -302,7 +337,8 @@
     }, [searchTerm]);
 
     // Forms
-    const [assetForm, setAssetForm] = useState({ nama: "", kategori: "Kuarters", kekosongan: "", status: "Aktif", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" });
+    // Tambah lat: "" dan lng: "" di sini
+    const [assetForm, setAssetForm] = useState({ nama: "", kategori: "Kuarters", kekosongan: "", status: "Aktif", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "", lat: "", lng: "" });
     const [userForm, setUserForm] = useState({ email: "", password: "", nama: "", noTelefon: "", syarikat: "", role: "user" });
     const [bannerForm, setBannerForm] = useState({ title: "", subtitle: "", expiry: "", url: "" });
 
@@ -420,7 +456,7 @@
         setLoading(false);
         setToast({ message: res.message, type: res.success ? "success" : "error" });
         if (res.success) {
-          setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" });
+          setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "", lat: "", lng: "" });
           setEditMode(false); setEditId(null); setRefresh(p => p + 1);
         }
       };
@@ -430,7 +466,7 @@
 
     const handleEditAssetClick = (asset) => {
       setEditMode(true); setEditId(asset.id);
-      setAssetForm({ nama: asset.nama, kategori: asset.kategori, kekosongan: asset.rawKekosongan, status: asset.status, lokasi: asset.lokasi, deskripsi: asset.deskripsi, saiz: asset.saiz, info: asset.info, harga: asset.harga || "" });
+      setAssetForm({ nama: asset.nama, kategori: asset.kategori, kekosongan: asset.rawKekosongan, status: asset.status, lokasi: asset.lokasi, deskripsi: asset.deskripsi, saiz: asset.saiz, info: asset.info, harga: asset.harga || "", lat: asset.lat || "", lng: asset.lng || ""});
     };
 
     const handleDeleteItem = (type, index) => {
@@ -1156,9 +1192,14 @@
                       </div>
                     )}
 
-                    {/* CHARTS */}
+                    {/* CHARTS - EXECUTIVE DASHBOARD */}
                     {["admin", "staff"].includes(user.role) && stats && (
-                        <DashboardCharts apps={allApps} stats={stats} />
+                        <DashboardCharts 
+                            apps={allApps} 
+                            stats={stats} 
+                            assets={allAssets}   // <--- Tambah Ini
+                            tickets={allTickets} // <--- Tambah Ini
+                        />
                     )}
                   </div>
                 )}
@@ -1321,7 +1362,7 @@
                                {editMode ? <><Icons.Edit className="w-5 h-5 mr-2 text-orange-600"/> Kemaskini Aset</> : <><Icons.Plus className="w-5 h-5 mr-2 text-blue-600"/> Tambah Aset Baru</>}
                             </h4>
                             {/* Butang Tutup dalam Form */}
-                            <button type="button" onClick={() => { setEditMode(false); setShowAssetForm(false); setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "" }); }} className="text-red-500 text-xs font-bold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
+                            <button type="button" onClick={() => { setEditMode(false); setShowAssetForm(false); setAssetForm({ nama: "", kategori: "Kuarters", status: "Aktif", kekosongan: "", lokasi: "", deskripsi: "", saiz: "", info: "", harga: "", lat: "", lng: "" }); }} className="text-red-500 text-xs font-bold hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors">
                                {editMode ? "Batal Edit" : "Tutup"}
                             </button>
                          </div>
@@ -1360,6 +1401,40 @@
                                   <input type="number" step="0.01" required value={assetForm.harga} onChange={e => setAssetForm({...assetForm, harga: e.target.value})} className="w-full p-4 pl-12 rounded-xl border border-white/60 bg-white/50 outline-none text-sm font-black text-blue-900 shadow-sm backdrop-blur-sm focus:bg-white transition-all"/>
                                </div>
                             </div>
+                            {/* --- INPUT KOORDINAT PETA (GIS) --- */}
+                            <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                <div className="col-span-2 flex items-center mb-1">
+                                    <div className="w-1.5 h-4 bg-blue-500 rounded mr-2"></div>
+                                    <span className="text-xs font-bold text-blue-700 uppercase">Tetapan Peta (Google Maps)</span>
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Latitude</label>
+                                    <input 
+                                        value={assetForm.lat} 
+                                        onChange={e => setAssetForm({...assetForm, lat: e.target.value})} 
+                                        className="w-full p-3 rounded-xl border border-white/60 bg-white/80 outline-none text-sm font-mono text-slate-600 shadow-sm" 
+                                        placeholder="Cth: 6.4431" 
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Longitude</label>
+                                    <input 
+                                        value={assetForm.lng} 
+                                        onChange={e => setAssetForm({...assetForm, lng: e.target.value})} 
+                                        className="w-full p-3 rounded-xl border border-white/60 bg-white/80 outline-none text-sm font-mono text-slate-600 shadow-sm" 
+                                        placeholder="Cth: 100.1982" 
+                                    />
+                                </div>
+                                
+                                <div className="col-span-2 text-right">
+                                    <a href="https://www.google.com/maps" target="_blank" className="text-[10px] font-bold text-blue-500 hover:text-blue-700 hover:underline flex items-center justify-end">
+                                        Buka Google Maps <Icons.ExternalLink className="w-3 h-3 ml-1"/>
+                                    </a>
+                                </div>
+                            </div>
+                            {/* ---------------------------------- */}
                             <div className="md:col-span-2">
                                <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wider ml-1 mb-1 block">Lokasi</label>
                                <input required value={assetForm.lokasi} onChange={e => setAssetForm({...assetForm, lokasi: e.target.value})} className="w-full p-4 rounded-xl border border-white/60 bg-white/50 outline-none text-sm shadow-sm backdrop-blur-sm" placeholder="Contoh: LKIM Batu Maung"/>
@@ -1542,16 +1617,17 @@
                                                                                 <button 
                                                                                     onClick={() => { 
                                                                                         handleEditAssetClick(a); 
-                                                                                        setShowAssetForm(true); // Buka borang
-                                                                                        document.querySelector('form').scrollIntoView({behavior:'smooth'}); 
+                                                                                        setShowAssetForm(true); 
+                                                                                        // Tunggu 100ms supaya borang sempat keluar sebelum scroll
+                                                                                        setTimeout(() => {
+                                                                                            const formEl = document.querySelector('form');
+                                                                                            if (formEl) formEl.scrollIntoView({behavior:'smooth'});
+                                                                                        }, 100);
                                                                                     }} 
                                                                                     className="bg-white/60 p-2.5 rounded-xl border border-white/50 text-blue-600 hover:bg-blue-50 hover:shadow-md transition-all" 
                                                                                     title="Edit Aset"
                                                                                 >
                                                                                     <Icons.Edit className="w-4 h-4"/>
-                                                                                </button>
-                                                                                <button onClick={() => handleDeleteItem('asset', a.id)} className="bg-white/60 p-2.5 rounded-xl border border-white/50 text-red-600 hover:bg-red-50 hover:shadow-md transition-all" title="Padam Aset">
-                                                                                    <Icons.Trash className="w-4 h-4"/>
                                                                                 </button>
                                                                             </div>
                                                                         )}

@@ -256,6 +256,9 @@ function getAssets() {
         finalStatus = "Aktif";
       }
 
+      var latVal = dataAssets[i][9] ? parseFloat(dataAssets[i][9]) : null;
+      var lngVal = dataAssets[i][10] ? parseFloat(dataAssets[i][10]) : null;
+
       assets.push({
         id: i + 1,
         nama: namaAset,
@@ -268,7 +271,9 @@ function getAssets() {
         deskripsi: dataAssets[i][5] || "",
         saiz: dataAssets[i][6] || "-",
         info: dataAssets[i][7] || "-",
-        harga: dataAssets[i][8] || "0"
+        harga: dataAssets[i][8] || "0",
+        lat: latVal,
+        lng: lngVal
       });
     }
   }
@@ -280,10 +285,10 @@ function addAsset(form) {
   var sheet = ss.getSheetByName('Assets');
   if (!sheet) {
     sheet = ss.insertSheet('Assets');
-    sheet.appendRow(['Nama', 'Kategori', 'Kekosongan', 'Status', 'Lokasi', 'Deskripsi', 'Saiz', 'Info', 'Harga']);
+    sheet.appendRow(['Nama', 'Kategori', 'Kekosongan', 'Status', 'Lokasi', 'Deskripsi', 'Saiz', 'Info', 'Harga', 'Latitude', 'Longitude']);
   }
 
-  sheet.appendRow([form.nama, form.kategori, form.kekosongan, form.status, form.lokasi, form.deskripsi || "-", form.saiz || "-", form.info || "-", form.harga || "0"]);
+  sheet.appendRow([form.nama, form.kategori, form.kekosongan, form.status, form.lokasi, form.deskripsi || "-", form.saiz || "-", form.info || "-", form.harga || "0", form.lat || "", form.lng || ""]);
 
   // Kita guna 'Admin' umum sebab frontend tak hantar emel admin dalam form asset
   logAudit("ADMIN", "admin", "TAMBAH_ASET", "Menambah aset baru: " + form.nama);
@@ -296,7 +301,7 @@ function updateAsset(form) {
   var rowIndex = form.id;
   if (rowIndex > sheet.getLastRow()) return { success: false, message: "Aset tidak dijumpai." };
 
-  sheet.getRange(rowIndex, 1, 1, 9).setValues([[form.nama, form.kategori, form.kekosongan, form.status, form.lokasi, form.deskripsi, form.saiz, form.info, form.harga]]);
+  sheet.getRange(rowIndex, 1, 1, 11).setValues([[form.nama, form.kategori, form.kekosongan, form.status, form.lokasi, form.deskripsi, form.saiz, form.info, form.harga, form.lat, form.lng]]);
   return { success: true, message: "Aset berjaya dikemaskini." };
 }
 

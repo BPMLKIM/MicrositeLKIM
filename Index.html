@@ -15,6 +15,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
 <style>
   /* --- 1. SETUP ASAS --- */
@@ -116,6 +119,36 @@
     background-clip: content-box; 
   }
   ::-webkit-scrollbar-thumb:hover { background-color: rgba(255,255,255,0.5); }
+
+  /* --- STYLE PIN PETA (WAJIB ADA) --- */
+  .custom-div-icon {
+    background: transparent;
+    border: none;
+  }
+  
+  .marker-pin {
+    width: 30px;
+    height: 30px;
+    border-radius: 50% 50% 50% 0;
+    background: #ea580c; /* Warna Default */
+    position: absolute;
+    transform: rotate(-45deg);
+    left: 50%;
+    top: 50%;
+    margin: -15px 0 0 -15px;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.3);
+  }
+  
+  /* Bulatan putih di tengah pin */
+  .marker-pin::after {
+    content: '';
+    width: 14px;
+    height: 14px;
+    margin: 8px 0 0 8px;
+    background: #fff;
+    position: absolute;
+    border-radius: 50%;
+  }
 
 </style>
 
